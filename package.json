@@ -1,0 +1,30 @@
+{
+  "name": "felicia-project",
+  "version": "1.0.0",
+  "description": "Felicia — Personal AI Assistant Discord Bot (Gemini + Google Calendar)",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "register": "node scripts/register-commands.js",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.21.0",
+    "@supabase/supabase-js": "^2.49.1",
+    "dotenv": "^16.4.7",
+    "googleapis": "^144.0.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "react-router-dom": "^7.14.1",
+    "tweetnacl": "^1.0.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.0.1",
+    "vite": "^8.0.8"
+  }
+}

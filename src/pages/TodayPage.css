@@ -1,0 +1,73 @@
+.today-page {
+  padding-bottom: 40px;
+}
+
+.today-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+  padding: 20px 28px;
+}
+
+.today-card {
+  min-height: 120px;
+}
+
+.schedule-card { grid-column: span 1; }
+
+.sched-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sched-item {
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  padding: 6px 10px;
+  background: var(--bg-input);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--primary);
+}
+
+.quick-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ask-input-row {
+  display: flex;
+  gap: 8px;
+}
+.ask-input-row .input { flex: 1; }
+
+.ask-reply {
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--bg-bubble-bot);
+  border-radius: var(--radius-md);
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+}
+
+.quota-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.quota-warn {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+@media (max-width: 768px) {
+  .today-grid {
+    grid-template-columns: 1fr;
+    padding: 14px 16px;
+  }
+}

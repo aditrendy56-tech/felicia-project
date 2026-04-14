@@ -1,0 +1,71 @@
+{
+  "items": [
+    { "category": "identity", "content": "STATE[identity_name] Nama lengkap: M. Rendi Adhitya Atmaja Putra.", "topicKey": "identity_name", "memoryType": "state", "source": "manual_seed" },
+    { "category": "identity", "content": "STATE[identity_alias] Nama panggilan utama: Adit dan Rendy.", "topicKey": "identity_alias", "memoryType": "state", "source": "manual_seed" },
+    { "category": "identity", "content": "STATE[identity_gender] Jenis kelamin: laki-laki.", "topicKey": "identity_gender", "memoryType": "state", "source": "manual_seed" },
+    { "category": "identity", "content": "STATE[identity_domicile] Domisili utama: Bandar Lampung.", "topicKey": "identity_domicile", "memoryType": "state", "source": "manual_seed" },
+    { "category": "identity", "content": "STATE[identity_language] Bahasa komunikasi utama: Indonesia santai, jelas, tidak bertele-tele.", "topicKey": "identity_language", "memoryType": "state", "source": "manual_seed" },
+    { "category": "identity", "content": "STATE[identity_project_name] Nama sistem personal AI: FELICIA Project.", "topicKey": "identity_project_name", "memoryType": "state", "source": "manual_seed" },
+
+    { "category": "values", "content": "STATE[values_life_philosophy] Filosofi inti: Gua Operator Hidup Gua.", "topicKey": "values_life_philosophy", "memoryType": "state", "source": "manual_seed" },
+    { "category": "values", "content": "STATE[values_building_mindset] Mindset: membangun sistem jangka panjang, bukan sekadar fitur cepat.", "topicKey": "values_building_mindset", "memoryType": "state", "source": "manual_seed" },
+    { "category": "values", "content": "STATE[values_execution_style] Gaya eksekusi: praktik langsung lebih cocok daripada teori panjang.", "topicKey": "values_execution_style", "memoryType": "state", "source": "manual_seed" },
+    { "category": "values", "content": "STATE[values_feedback_style] Prefer feedback yang realistis, jujur, dan tetap suportif.", "topicKey": "values_feedback_style", "memoryType": "state", "source": "manual_seed" },
+    { "category": "values", "content": "STATE[values_priority] Prioritas: stabil income, bangun leverage skill, dan pertahankan kesehatan mental.", "topicKey": "values_priority", "memoryType": "state", "source": "manual_seed" },
+    { "category": "values", "content": "STATE[values_project_intent] FELICIA awalnya dibangun untuk personal operating system diri sendiri.", "topicKey": "values_project_intent", "memoryType": "state", "source": "manual_seed" },
+
+    { "category": "goal", "content": "STATE[goal_short_income] Goal jangka pendek: stabilkan income harian dan mingguan.", "topicKey": "goal_short_income", "memoryType": "state", "source": "manual_seed" },
+    { "category": "goal", "content": "STATE[goal_short_system] Goal jangka pendek: sistem Felicia stabil untuk chat, calendar, memory, dan context.", "topicKey": "goal_short_system", "memoryType": "state", "source": "manual_seed" },
+    { "category": "goal", "content": "STATE[goal_mid_skill] Goal menengah: naik level sebagai system builder (automation, API, AI integration).", "topicKey": "goal_mid_skill", "memoryType": "state", "source": "manual_seed" },
+    { "category": "goal", "content": "STATE[goal_mid_business] Goal menengah: gunakan skill automation untuk peluang freelance dan bisnis.", "topicKey": "goal_mid_business", "memoryType": "state", "source": "manual_seed" },
+    { "category": "goal", "content": "STATE[goal_long_cepot] Goal jangka panjang: bantu Cepot Tech jadi sustainable.", "topicKey": "goal_long_cepot", "memoryType": "state", "source": "manual_seed" },
+    { "category": "goal", "content": "STATE[goal_long_transition] Goal jangka panjang: transisi dari kerja harian ke leverage berbasis sistem.", "topicKey": "goal_long_transition", "memoryType": "state", "source": "manual_seed" },
+    { "category": "goal", "content": "STATE[goal_personal_ai_os] Visi: membangun Personal AI Operating System dengan command center fleksibel.", "topicKey": "goal_personal_ai_os", "memoryType": "state", "source": "manual_seed" },
+    { "category": "goal", "content": "STATE[goal_modular_persona] Visi: persona modular Felicia default, Rex, dan Wesker.", "topicKey": "goal_modular_persona", "memoryType": "state", "source": "manual_seed" },
+
+    { "category": "work", "content": "STATE[work_role_cepot] Peran utama: COO di Cepot Tech.", "topicKey": "work_role_cepot", "memoryType": "state", "source": "manual_seed" },
+    { "category": "work", "content": "STATE[work_role_driver] Aktivitas income harian: driver ShopeeFood.", "topicKey": "work_role_driver", "memoryType": "state", "source": "manual_seed" },
+    { "category": "work", "content": "STATE[work_role_freelance] Aktivitas tambahan: freelance web development.", "topicKey": "work_role_freelance", "memoryType": "state", "source": "manual_seed" },
+    { "category": "work", "content": "STATE[work_command_center] Pusat perintah saat ini dipindah dari Discord ke Web.", "topicKey": "work_command_center", "memoryType": "state", "source": "manual_seed" },
+    { "category": "work", "content": "STATE[work_architecture] Arsitektur: serverless API + Supabase + Google Calendar + Gemini.", "topicKey": "work_architecture", "memoryType": "state", "source": "manual_seed" },
+    { "category": "work", "content": "STATE[work_phase_now] Posisi fase saat ini: foundation dan phase-2 memory/context.", "topicKey": "work_phase_now", "memoryType": "state", "source": "manual_seed" },
+    { "category": "work", "content": "STATE[work_next_focus] Fokus dekat: stabilisasi memory berkualitas dan konsistensi analisis lintas waktu.", "topicKey": "work_next_focus", "memoryType": "state", "source": "manual_seed" },
+    { "category": "work", "content": "STATE[work_parallel_plan] Rencana paralel: belajar dan monetisasi use case automation dengan n8n.", "topicKey": "work_parallel_plan", "memoryType": "state", "source": "manual_seed" },
+
+    { "category": "learning", "content": "STATE[learning_stack] Stack belajar utama: JavaScript, Node.js, API integration, AI workflow.", "topicKey": "learning_stack", "memoryType": "state", "source": "manual_seed" },
+    { "category": "learning", "content": "STATE[learning_style] Pola belajar paling efektif: bangun langsung, iterasi cepat, evaluasi hasil.", "topicKey": "learning_style", "memoryType": "state", "source": "manual_seed" },
+    { "category": "learning", "content": "STATE[learning_limit] Tantangan belajar: waktu, energi, dan fokus yang terbagi.", "topicKey": "learning_limit", "memoryType": "state", "source": "manual_seed" },
+    { "category": "learning", "content": "STATE[learning_need] Butuh AI yang menjaga konteks agar tidak perlu ulang penjelasan dari nol.", "topicKey": "learning_need", "memoryType": "state", "source": "manual_seed" },
+    { "category": "learning", "content": "STATE[learning_target] Target skill leverage: mampu design workflow automation end-to-end.", "topicKey": "learning_target", "memoryType": "state", "source": "manual_seed" },
+    { "category": "learning", "content": "STATE[learning_agent_vision] Visi belajar: dari workflow assistant menuju agent yang lebih otonom.", "topicKey": "learning_agent_vision", "memoryType": "state", "source": "manual_seed" },
+    { "category": "learning", "content": "STATE[learning_persona] Tertarik ke persona AI dengan gaya pikir dan suara berbeda.", "topicKey": "learning_persona", "memoryType": "state", "source": "manual_seed" },
+    { "category": "learning", "content": "STATE[learning_security] Tertarik menambah security layer (voice identity untuk akses data sensitif).", "topicKey": "learning_security", "memoryType": "state", "source": "manual_seed" },
+
+    { "category": "health", "content": "STATE[health_energy_pattern] Energi cenderung naik setelah siang; jam bangun fleksibel sekitar 11-13.", "topicKey": "health_energy_pattern", "memoryType": "state", "source": "manual_seed" },
+    { "category": "health", "content": "STATE[health_risk_overwork] Risiko personal: overwork dan overload jika terlalu banyak konteks paralel.", "topicKey": "health_risk_overwork", "memoryType": "state", "source": "manual_seed" },
+    { "category": "health", "content": "STATE[health_support_need] Butuh sistem yang membantu breakdown target jadi langkah kecil saat overwhelm.", "topicKey": "health_support_need", "memoryType": "state", "source": "manual_seed" },
+    { "category": "health", "content": "STATE[health_gym] Aktivitas fisik penting: gym sebagai stabilizer energi dan mental.", "topicKey": "health_gym", "memoryType": "state", "source": "manual_seed" },
+    { "category": "health", "content": "STATE[health_recovery] Recovery day penting untuk menjaga konsistensi jangka panjang.", "topicKey": "health_recovery", "memoryType": "state", "source": "manual_seed" },
+
+    { "category": "finance", "content": "STATE[finance_income_focus] Fokus finansial saat ini: cashflow stabil dulu sebelum ekspansi besar.", "topicKey": "finance_income_focus", "memoryType": "state", "source": "manual_seed" },
+    { "category": "finance", "content": "STATE[finance_source_mix] Sumber pendapatan campuran: ShopeeFood, freelance, dan peluang automation service.", "topicKey": "finance_source_mix", "memoryType": "state", "source": "manual_seed" },
+    { "category": "finance", "content": "STATE[finance_decision_rule] Keputusan kerja diprioritaskan yang berdampak ke income dan skill leverage.", "topicKey": "finance_decision_rule", "memoryType": "state", "source": "manual_seed" },
+    { "category": "finance", "content": "STATE[finance_business_view] Bisnis dilihat sebagai hasil dari sistem yang konsisten, bukan gimmick sesaat.", "topicKey": "finance_business_view", "memoryType": "state", "source": "manual_seed" },
+
+    { "category": "spiritual", "content": "STATE[spiritual_direction] Ingin punya modul persona yang lebih religius untuk diskusi rohani.", "topicKey": "spiritual_direction", "memoryType": "state", "source": "manual_seed" },
+    { "category": "relationship", "content": "STATE[relationship_ai_style] Relasi dengan AI diharapkan terasa personal, konsisten, dan tidak menghakimi.", "topicKey": "relationship_ai_style", "memoryType": "state", "source": "manual_seed" },
+    { "category": "relationship", "content": "STATE[relationship_accountability] AI diharapkan menjadi accountability partner untuk progres mingguan.", "topicKey": "relationship_accountability", "memoryType": "state", "source": "manual_seed" },
+    { "category": "relationship", "content": "STATE[relationship_tone] Tone ideal: tegas tapi caring, kadang humor ringan untuk menjaga semangat.", "topicKey": "relationship_tone", "memoryType": "state", "source": "manual_seed" },
+
+    { "category": "timeline", "content": "DELTA[timeline_platform_shift] Pusat interaksi dipindahkan dari Discord ke web command center agar lebih fleksibel scaling.", "topicKey": "timeline_platform_shift", "memoryType": "delta", "source": "manual_seed" },
+    { "category": "timeline", "content": "DELTA[timeline_calendar_fix] Integrasi Google Calendar sempat gagal karena typo environment variable, lalu diperbaiki.", "topicKey": "timeline_calendar_fix", "memoryType": "delta", "source": "manual_seed" },
+    { "category": "timeline", "content": "DELTA[timeline_memory_phase] Sistem memory Supabase dan conversation history sudah aktif di phase 2.", "topicKey": "timeline_memory_phase", "memoryType": "delta", "source": "manual_seed" },
+    { "category": "timeline", "content": "DELTA[timeline_direction] Arah proyek dikunci sebagai personal AI operating system, bukan bot command biasa.", "topicKey": "timeline_direction", "memoryType": "delta", "source": "manual_seed" },
+    { "category": "timeline", "content": "DELTA[timeline_business_thought] Bisnis dipertimbangkan jangka panjang, tetapi fokus awal tetap validasi personal use case.", "topicKey": "timeline_business_thought", "memoryType": "delta", "source": "manual_seed" },
+    { "category": "timeline", "content": "DELTA[timeline_n8n_parallel] Rencana n8n dijalankan paralel sebagai jalur monetisasi skill automation jangka dekat.", "topicKey": "timeline_n8n_parallel", "memoryType": "delta", "source": "manual_seed" },
+    { "category": "timeline", "content": "DELTA[timeline_persona_plan] Konsep multi persona (Felicia, Rex, Wesker) sudah didefinisikan sebagai roadmap inti.", "topicKey": "timeline_persona_plan", "memoryType": "delta", "source": "manual_seed" },
+    { "category": "timeline", "content": "DELTA[timeline_voice_plan] Layer voice (STT, TTS, speaker recognition) ditetapkan sebagai fase lanjutan setelah core stabil.", "topicKey": "timeline_voice_plan", "memoryType": "delta", "source": "manual_seed" },
+    { "category": "timeline", "content": "DELTA[timeline_os_control_plan] Local OS control (buka file, context search, konfirmasi aksi) menjadi target fase advanced.", "topicKey": "timeline_os_control_plan", "memoryType": "delta", "source": "manual_seed" },
+    { "category": "timeline", "content": "DELTA[timeline_security_guard] Guard data permanen ditambahkan agar identitas inti tidak berubah akibat chat menyimpang.", "topicKey": "timeline_security_guard", "memoryType": "delta", "source": "manual_seed" }
+  ]
+}
