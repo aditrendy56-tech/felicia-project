@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import PageHeader from '../components/PageHeader';
-import { sendChat, getQuotaEta, setMode } from '../services/api';
+import { sendChat, getQuotaEta, setMode, getEvents } from '../services/api';
 import './TodayPage.css';
 
 function getGreeting() {
@@ -29,12 +29,16 @@ export default function TodayPage() {
 
   useEffect(() => {
     // Fetch today's schedule
-    sendChat({ message: 'jadwal hari ini', chatType: 'utama' })
+    getEvents()
       .then(d => {
-        if (d?.reply) {
-          // Parse reply text into simple items
-          const lines = d.reply.split('\n').filter(l => l.trim());
-          setSchedule(lines);
+        if (d?.events && Array.isArray(d.events)) {
+          // Format events into simple schedule items
+          const formatted = d.events.map(event => 
+            `${event.start?.slice(11,16) || '??:??'} - ${event.summary || 'No title'}`
+          );
+          setSchedule(formatted.length > 0 ? formatted : ['Tidak ada jadwal hari ini']);
+        } else {
+          setSchedule(['Tidak ada jadwal hari ini']);
         }
       })
       .catch(() => setSchedule(['Gagal memuat jadwal']))
