@@ -11,6 +11,8 @@ import {
   renameThread,
   getQuotaEta,
   getCaseSuggestions,
+  createCaseAutoAction,
+  updateCaseAction,
 } from '../services/api';
 import './ChatPage.css';
 
@@ -33,6 +35,8 @@ export default function ChatPage() {
   const [sideOpen, setSideOpen] = useState(true);
   const [caseSuggestions, setCaseSuggestions] = useState([]);
   const [showCaseSuggestions, setShowCaseSuggestions] = useState(false);
+  // ✨ Phase 3: Case action confirmation
+  const [caseActionModal, setCaseActionModal] = useState(null);
   const msgEnd = useRef(null);
   const inputRef = useRef(null);
 
@@ -95,6 +99,40 @@ export default function ChatPage() {
     }
   }, [input]);
 
+  // ✨ Phase 3: Handle case action confirmation
+  const handleCaseActionConfirm = async () => {
+    if (!caseActionModal) return;
+
+    try {
+      if (caseActionModal.type === 'create_case') {
+        const params = caseActionModal.params;
+        await createCaseAutoAction({
+          title: params.title,
+          category: params.category || 'general',
+          summary: params.summary || '',
+          entities: params.entities || [],
+        });
+        const confirmMsg = `✅ Case "${params.title}" berhasil dibuat!`;
+        setMessages(prev => [...prev, { role: 'system', content: confirmMsg, created_at: new Date().toISOString() }]);
+      } else if (caseActionModal.type === 'update_case') {
+        const params = caseActionModal.params;
+        await updateCaseAction(params.caseId, params.detail);
+        const confirmMsg = `✅ Case berhasil diupdate!`;
+        setMessages(prev => [...prev, { role: 'system', content: confirmMsg, created_at: new Date().toISOString() }]);
+      }
+    } catch (err) {
+      console.error('Error handling case action:', err);
+      const errorMsg = `⚠️ Ada kesalahan saat membuat/update case: ${err.message}`;
+      setMessages(prev => [...prev, { role: 'system', content: errorMsg, created_at: new Date().toISOString() }]);
+    } finally {
+      setCaseActionModal(null);
+    }
+  };
+
+  const handleCaseActionCancel = () => {
+    setCaseActionModal(null);
+  };
+
   async function handleNewThread() {
     try {
       const d = await createThread(chatType);
@@ -148,6 +186,25 @@ export default function ChatPage() {
       const reply = d?.reply || d?.error || 'Hmm, aku nggak bisa jawab sekarang.';
       const botMsg = { role: 'assistant', content: reply, created_at: new Date().toISOString() };
       setMessages(prev => [...prev, botMsg]);
+
+      // ✨ Phase 3: Handle case actions
+      if (d?.action === 'create_case_auto' && d?.type === 'action') {
+        setCaseActionModal({
+          type: 'create_case',
+          action: d?.action,
+          params: d?.params || {},
+          message: reply,
+          threadId,
+        });
+      } else if (d?.action === 'update_case' && d?.type === 'action') {
+        setCaseActionModal({
+          type: 'update_case',
+          action: d?.action,
+          params: d?.params || {},
+          message: reply,
+          threadId,
+        });
+      }
 
       // Auto-rename thread if it's the first message
       if (messages.length === 0 && threadId) {
@@ -359,6 +416,37 @@ export default function ChatPage() {
 
           <div className="chat-input-hint">Enter kirim · Shift+Enter baris baru</div>
         </div>
+
+        {/* ✨ Phase 3: Case Action Confirmation Modal */}
+        {caseActionModal && (
+          <div className="modal-overlay" onClick={handleCaseActionCancel}>
+            <div className="modal-content" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                {caseActionModal.type === 'create_case' ? '📋 Buat Case Baru?' : '📝 Update Case?'}
+              </div>
+              <div className="modal-body">
+                <p>{caseActionModal.message}</p>
+                {caseActionModal.type === 'create_case' && caseActionModal.params && (
+                  <div className="case-details">
+                    <div><strong>Judul:</strong> {caseActionModal.params.title}</div>
+                    <div><strong>Kategori:</strong> {caseActionModal.params.category || 'general'}</div>
+                    {caseActionModal.params.entities && caseActionModal.params.entities.length > 0 && (
+                      <div><strong>Terlibat:</strong> {caseActionModal.params.entities.join(', ')}</div>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-ghost" onClick={handleCaseActionCancel}>
+                  Batal
+                </button>
+                <button className="btn btn-primary" onClick={handleCaseActionConfirm}>
+                  {caseActionModal.type === 'create_case' ? 'Buat Case' : 'Update Case'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

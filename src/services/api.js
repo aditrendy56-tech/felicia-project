@@ -90,9 +90,17 @@ export async function getCasesAction(status = 'active') {
   return post('/chat', { action: 'get_cases', params: { status } });
 }
 
-// ✨ Phase 2: Get case suggestions
+// ✨ Phase 3: Get case suggestions
 export async function getCaseSuggestions(message) {
   return post('/chat', { action: 'get_case_suggestions', params: { message } });
+}
+
+export async function createCaseAutoAction({ title, category = 'general', summary = '', entities = [] }) {
+  return post('/chat', { action: 'create_case_auto', params: { title, category, summary, entities } });
+}
+
+export async function updateCaseAction(caseId, detail) {
+  return post('/chat', { action: 'update_case', params: { caseId, detail } });
 }
 
 /* ── Quota ── */

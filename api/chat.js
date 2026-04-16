@@ -36,6 +36,8 @@ import {
   extractCaseFromMessage,
   detectCaseUpdate,
   generateCaseSummary,
+  analyzeCaseRelationships,
+  buildCaseContextForReply,
 } from './_lib/cases.js';
 import { DEFAULT_PROFILE_FACTS, getCanonicalProfile } from './_lib/profile.js';
 
@@ -939,6 +941,18 @@ async function executeAction(action, params, currentEvents, userMessage = '', kn
           const list = dateEvents.map(e => `• ${e.start}—${e.end}: ${e.summary}`).join('\n');
           return `📅 Jadwal tanggal ${params.date}:\n${list}`;
         }
+        return null;
+      }
+
+      // ✨ Phase 3: Case auto-create (handler built-in, just return success)
+      case 'create_case_auto': {
+        // Note: handler is in handleCreateCaseAutoAction, this is fallback
+        return null;
+      }
+
+      // ✨ Phase 3: Case update (handler built-in, just return success)
+      case 'update_case': {
+        // Note: handler is in handleUpdateCaseAction, this is fallback
         return null;
       }
 

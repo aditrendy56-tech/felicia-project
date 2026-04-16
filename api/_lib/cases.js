@@ -552,3 +552,107 @@ export async function generateCaseSummary(caseId) {
     return null;
   }
 }
+
+/**
+ * ✨ Phase 3: Analyze case relationships berdasarkan entities, category, timeline
+ */
+export async function analyzeCaseRelationships(caseId) {
+  try {
+    const targetCase = await getCaseById(caseId);
+    if (!targetCase) return [];
+
+    const allCases = await getCases('active');
+    const relationships = [];
+
+    allCases.forEach(c => {
+      if (c.id === caseId) return; // Skip self
+
+      let connectionStrength = 0;
+      const reasons = [];
+
+      // 1. Shared entities (nama yang sama)
+      if (targetCase.entities && c.entities) {
+        const sharedEntities = targetCase.entities.filter(e =>
+          c.entities.includes(e)
+        );
+        if (sharedEntities.length > 0) {
+          connectionStrength += sharedEntities.length * 50;
+          reasons.push(`Sama-sama tentang ${sharedEntities.join(', ')}`);
+        }
+      }
+
+      // 2. Same category
+      if (targetCase.category === c.category) {
+        connectionStrength += 30;
+        reasons.push(`Kategori ${c.category} sama`);
+      }
+
+      // 3. Timeline proximity (updated dalam 7 hari)
+      const targetTime = new Date(targetCase.updated_at || targetCase.created_at).getTime();
+      const caseTime = new Date(c.updated_at || c.created_at).getTime();
+      const daysDiff = Math.abs(targetTime - caseTime) / (1000 * 60 * 60 * 24);
+      if (daysDiff < 7) {
+        connectionStrength += 20;
+        reasons.push('Update dalam 1 minggu terakhir');
+      }
+
+      // 4. Context keywords (minimal 2 words in common)
+      if (targetCase.summary && c.summary) {
+        const targetWords = new Set(targetCase.summary.toLowerCase().split(/\s+/));
+        const caseWords = c.summary.toLowerCase().split(/\s+/);
+        const sharedWords = caseWords.filter(w => targetWords.has(w) && w.length > 3).length;
+        if (sharedWords >= 2) {
+          connectionStrength += 15;
+          reasons.push('Konteks serupa');
+        }
+      }
+
+      if (connectionStrength > 0) {
+        relationships.push({
+          id: c.id,
+          title: c.title,
+          category: c.category,
+          connectionStrength,
+          reasons,
+          relatedEntities: targetCase.entities?.filter(e => c.entities?.includes(e)) || [],
+        });
+      }
+    });
+
+    return relationships.sort((a, b) => b.connectionStrength - a.connectionStrength);
+  } catch (error) {
+    console.error('[Cases] Error analyzing case relationships:', error);
+    return [];
+  }
+}
+
+/**
+ * ✨ Phase 3: Generate relationship context untuk injection ke Gemini reply
+ */
+export async function buildCaseContextForReply(caseId) {
+  try {
+    const caseData = await getCaseById(caseId);
+    if (!caseData) return '';
+
+    const relationships = await analyzeCaseRelationships(caseId);
+    let context = `\n\n[CASE: ${caseData.title}]\n`;
+    context += `Category: ${caseData.category} | Status: ${caseData.status}\n`;
+    context += `Details: ${(caseData.details || []).length} update | Last: ${caseData.updated_at?.split('T')[0]}\n`;
+
+    if (caseData.entities && caseData.entities.length > 0) {
+      context += `Entities: ${caseData.entities.join(', ')}\n`;
+    }
+
+    if (relationships.length > 0) {
+      context += `\nRelated cases:\n`;
+      relationships.slice(0, 3).forEach(rel => {
+        context += `- ${rel.title} (${rel.reasons.join(' + ')})\n`;
+      });
+    }
+
+    return context;
+  } catch (error) {
+    console.error('[Cases] Error building case context:', error);
+    return '';
+  }
+}
