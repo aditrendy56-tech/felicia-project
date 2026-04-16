@@ -6,6 +6,7 @@ import GoalsPage from './pages/GoalsPage';
 import TimePage from './pages/TimePage';
 import FinancePage from './pages/FinancePage';
 import MemoryPage from './pages/MemoryPage';
+import StrategyPage from './pages/StrategyPage';
 import SettingsPage from './pages/SettingsPage';
 
 export default function App() {
@@ -19,6 +20,7 @@ export default function App() {
         <Route path="/time" element={<TimePage />} />
         <Route path="/finance" element={<FinancePage />} />
         <Route path="/memory" element={<MemoryPage />} />
+        <Route path="/strategy" element={<StrategyPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
     </Routes>

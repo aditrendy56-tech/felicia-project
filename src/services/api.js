@@ -80,6 +80,16 @@ export async function rescheduleEventAction({ eventId, startTime, endTime, summa
   return post('/chat', { action: 'reschedule', params: { eventId, startTime, endTime, summary } });
 }
 
+/* ── Cases ── */
+
+export async function createCaseAction({ title, category = 'general', summary = '', entities = [] }) {
+  return post('/chat', { action: 'create_case', params: { title, category, summary, entities } });
+}
+
+export async function getCasesAction(status = 'active') {
+  return post('/chat', { action: 'get_cases', params: { status } });
+}
+
 /* ── Quota ── */
 
 export async function getQuotaStatus() {

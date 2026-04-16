@@ -26,6 +26,7 @@ import {
   deleteChatThread,
   updateChatThreadTitle,
 } from './_lib/supabase.js';
+import { createCase, getCases, getCaseById, extractEntities } from './_lib/cases.js';
 import { DEFAULT_PROFILE_FACTS, getCanonicalProfile } from './_lib/profile.js';
 
 const MEMORY_REPEAT_TRACKER = new Map();
@@ -95,6 +96,12 @@ export default async function handler(req, res) {
   }
   if (routeAction === 'reschedule') {
     return handleRescheduleAction(body, res);
+  }
+  if (routeAction === 'create_case') {
+    return handleCreateCaseAction(body, res);
+  }
+  if (routeAction === 'get_cases') {
+    return handleGetCasesAction(body, res);
   }
 
   // Default: chat message
@@ -387,6 +394,72 @@ async function handleRescheduleAction(body, res) {
   } catch (err) {
     console.error('[Chat] rescheduleAction error:', err);
     return res.status(500).json({ error: 'Gagal reschedule event.' });
+  }
+}
+
+async function handleCreateCaseAction(body, res) {
+  try {
+    const params = body.params || {};
+    const title = typeof params.title === 'string' ? params.title.trim() : '';
+    const category = typeof params.category === 'string' ? params.category.trim() : 'general';
+    const summary = typeof params.summary === 'string' ? params.summary.trim() : '';
+    const entities = Array.isArray(params.entities) ? params.entities : [];
+
+    if (!title) {
+      return res.status(400).json({ error: 'Field "title" wajib diisi.' });
+    }
+
+    // Extract entities dari summary jika tidak ada explicit entities
+    const finalEntities = entities.length > 0 ? entities : extractEntities(summary);
+
+    const newCase = await createCase({
+      title,
+      category,
+      entities: finalEntities,
+      summary,
+      details: [],
+      relatedMemories: [],
+    });
+
+    if (!newCase) {
+      return res.status(500).json({ error: 'Gagal membuat case baru.' });
+    }
+
+    await safeAsync(() => logCommand({
+      userId: 'web-chat',
+      command: 'create_case_direct',
+      input: title,
+      action: 'create_case',
+      response: `Case "${title}" berhasil dibuat`.substring(0, 200),
+      status: 'success',
+    }));
+
+    return res.status(200).json({
+      ok: true,
+      case: newCase,
+      message: `✅ Case "${title}" berhasil dibuat!`,
+    });
+  } catch (err) {
+    console.error('[Chat] createCaseAction error:', err);
+    return res.status(500).json({ error: 'Gagal membuat case.' });
+  }
+}
+
+async function handleGetCasesAction(body, res) {
+  try {
+    const params = body.params || {};
+    const status = typeof params.status === 'string' ? params.status : 'active';
+
+    const cases = await getCases(status);
+
+    return res.status(200).json({
+      ok: true,
+      cases,
+      count: cases.length,
+    });
+  } catch (err) {
+    console.error('[Chat] getCasesAction error:', err);
+    return res.status(500).json({ error: 'Gagal mengambil daftar case.' });
   }
 }
 

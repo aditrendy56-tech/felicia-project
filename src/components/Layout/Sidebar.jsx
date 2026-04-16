@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { path: '/finance',  icon: '💰', label: 'Keuangan' },
   { section: 'Lainnya' },
   { path: '/memory',   icon: '🧠', label: 'Memory' },
+  { path: '/strategy', icon: '📋', label: 'Strategi' },
   { path: '/settings', icon: '⚙️', label: 'Settings' },
 ];
 
