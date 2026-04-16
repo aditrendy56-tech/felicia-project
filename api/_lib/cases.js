@@ -260,3 +260,143 @@ export function extractEntities(text) {
     .filter((v, i, a) => a.indexOf(v) === i); // unique
   return entities;
 }
+
+/**
+ * ✨ Phase 2: Analyze message untuk detect case references
+ * Return array of matching cases dengan relevance score
+ */
+export async function analyzeChatForCaseReference(message) {
+  try {
+    const cases = await getCases('active');
+    if (!cases || cases.length === 0) return [];
+
+    const matches = [];
+    const messageLower = message.toLowerCase();
+
+    cases.forEach(caseItem => {
+      let relevanceScore = 0;
+
+      // Check title
+      if (messageLower.includes(caseItem.title.toLowerCase())) {
+        relevanceScore += 100;
+      }
+
+      // Check entities
+      if (caseItem.entities && Array.isArray(caseItem.entities)) {
+        caseItem.entities.forEach(entity => {
+          if (messageLower.includes(entity.toLowerCase())) {
+            relevanceScore += 50;
+          }
+        });
+      }
+
+      // Check keywords dari summary
+      if (caseItem.summary) {
+        const keywords = caseItem.summary.split(' ').slice(0, 10);
+        keywords.forEach(kw => {
+          if (kw.length > 3 && messageLower.includes(kw.toLowerCase())) {
+            relevanceScore += 20;
+          }
+        });
+      }
+
+      // Check category keywords
+      const categoryKeywords = {
+        financial: ['utang', 'bayar', 'uang', 'hutang', 'cicilan', 'investasi'],
+        relationship: ['percintaan', 'cinta', 'couple', 'hubungan', 'pacaran', 'mantan'],
+        health: ['sakit', 'kesehatan', 'dokter', 'sehat', 'penyakit', 'rumah sakit'],
+        work: ['kerja', 'pekerjaan', 'project', 'tugas', 'bos', 'rekan kerja'],
+      };
+
+      if (categoryKeywords[caseItem.category]) {
+        categoryKeywords[caseItem.category].forEach(kw => {
+          if (messageLower.includes(kw)) {
+            relevanceScore += 15;
+          }
+        });
+      }
+
+      if (relevanceScore > 0) {
+        matches.push({
+          id: caseItem.id,
+          title: caseItem.title,
+          category: caseItem.category,
+          entities: caseItem.entities || [],
+          relevanceScore,
+        });
+      }
+    });
+
+    // Sort by relevance score, return top 3
+    return matches.sort((a, b) => b.relevanceScore - a.relevanceScore).slice(0, 3);
+  } catch (error) {
+    console.error('[Cases] Error analyzing chat for case reference:', error);
+    return [];
+  }
+}
+
+/**
+ * ✨ Phase 2: Extract keywords dari case untuk matching
+ */
+export async function extractCaseKeywords(caseData) {
+  const keywords = [];
+
+  if (caseData.title) keywords.push(...caseData.title.split(' '));
+  if (caseData.entities && Array.isArray(caseData.entities)) {
+    keywords.push(...caseData.entities);
+  }
+  if (caseData.summary) {
+    keywords.push(...caseData.summary.split(' ').slice(0, 20));
+  }
+
+  return keywords.filter(kw => kw && kw.length > 2);
+}
+
+/**
+ * ✨ Phase 2: Get related cases berdasarkan shared entities/category
+ */
+export async function getRelatedCases(caseId) {
+  try {
+    const targetCase = await getCaseById(caseId);
+    if (!targetCase) return [];
+
+    const allCases = await getCases('active');
+    const related = [];
+
+    allCases.forEach(c => {
+      if (c.id === caseId) return; // Skip self
+
+      let relevance = 0;
+
+      // Shared entities
+      if (targetCase.entities && c.entities) {
+        const sharedEntities = targetCase.entities.filter(e =>
+          c.entities.includes(e)
+        );
+        relevance += sharedEntities.length * 50;
+      }
+
+      // Shared category
+      if (targetCase.category === c.category) {
+        relevance += 30;
+      }
+
+      if (relevance > 0) {
+        related.push({
+          id: c.id,
+          title: c.title,
+          category: c.category,
+          relevance,
+          reason: targetCase.entities?.some(e =>
+            c.entities?.includes(e)
+          ) ? `Sama-sama tentang ${targetCase.entities?.[0]}` : `Kategori ${c.category} sama`,
+        });
+      }
+    });
+
+    return related.sort((a, b) => b.relevance - a.relevance);
+  } catch (error) {
+    console.error('[Cases] Error getting related cases:', error);
+    return [];
+  }
+}

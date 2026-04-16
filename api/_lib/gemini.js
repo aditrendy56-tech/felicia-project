@@ -37,6 +37,7 @@ function getGenAI() {
  * @param {Array} options.memories - memori personal Adit
  * @param {object|null} options.profileContext - konteks profil terstruktur (immutable, state, timeline)
  * @param {string} options.responseMode - concise|balanced|detailed
+ * @param {string} options.caseContext - ✨ Phase 2: case awareness context
  * @returns {object} { type: 'chat'|'action', action?, params?, reply }
  */
 export async function askGemini(userMessage, {
@@ -48,6 +49,7 @@ export async function askGemini(userMessage, {
   profileContext = null,
   responseMode = 'balanced',
   chatType = 'utama',
+  caseContext = '',
 } = {}) {
   const genAI = getGenAI();
   if (!genAI) {
@@ -57,8 +59,8 @@ export async function askGemini(userMessage, {
     };
   }
 
-  const systemPrompt = buildSystemPrompt(mode, events, memories, profileContext, chatType);
-  console.log('[Gemini] System prompt:', systemPrompt.length, 'chars | events:', events?.length || 0, '| memories:', memories?.length || 0, '| chatType:', chatType);
+  const systemPrompt = buildSystemPrompt(mode, events, memories, profileContext, chatType, caseContext);
+  console.log('[Gemini] System prompt:', systemPrompt.length, 'chars | events:', events?.length || 0, '| memories:', memories?.length || 0, '| chatType:', chatType, '| caseContext:', caseContext.length > 0 ? 'yes' : 'no');
 
   const effectiveResponseMode = normalizeResponseMode(responseMode);
 

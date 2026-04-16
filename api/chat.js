@@ -26,7 +26,14 @@ import {
   deleteChatThread,
   updateChatThreadTitle,
 } from './_lib/supabase.js';
-import { createCase, getCases, getCaseById, extractEntities } from './_lib/cases.js';
+import {
+  createCase,
+  getCases,
+  getCaseById,
+  extractEntities,
+  analyzeChatForCaseReference,
+  getRelatedCases,
+} from './_lib/cases.js';
 import { DEFAULT_PROFILE_FACTS, getCanonicalProfile } from './_lib/profile.js';
 
 const MEMORY_REPEAT_TRACKER = new Map();
@@ -102,6 +109,9 @@ export default async function handler(req, res) {
   }
   if (routeAction === 'get_cases') {
     return handleGetCasesAction(body, res);
+  }
+  if (routeAction === 'get_case_suggestions') {
+    return handleGetCaseSuggestionsAction(body, res);
   }
 
   // Default: chat message
@@ -463,6 +473,36 @@ async function handleGetCasesAction(body, res) {
   }
 }
 
+// ✨ Phase 2: Handle case suggestions
+async function handleGetCaseSuggestionsAction(body, res) {
+  try {
+    const params = body.params || {};
+    const message = typeof params.message === 'string' ? params.message.trim() : '';
+
+    if (!message) {
+      return res.status(400).json({ error: 'message required' });
+    }
+
+    const suggestions = await analyzeChatForCaseReference(message);
+
+    return res.status(200).json({
+      ok: true,
+      message,
+      suggestions: suggestions.map(s => ({
+        id: s.id,
+        title: s.title,
+        category: s.category,
+        entities: s.entities,
+        relevanceScore: s.relevanceScore,
+      })),
+      count: suggestions.length,
+    });
+  } catch (err) {
+    console.error('[Chat] getCaseSuggestionsAction error:', err);
+    return res.status(500).json({ error: 'Gagal menganalisis case suggestions.' });
+  }
+}
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // CHAT MESSAGE HANDLER
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -554,6 +594,17 @@ async function handleChatMessage(body, res) {
 
     const responseMode = inferResponseMode(pesan, chatType);
 
+    // ✨ Phase 2: Case awareness detection
+    const potentialCases = await analyzeChatForCaseReference(pesan);
+    let caseContext = '';
+    if (potentialCases && potentialCases.length > 0) {
+      const caseSuggestions = potentialCases
+        .map(c => `- ${c.title} (${c.category})${c.entities && c.entities.length > 0 ? ` [${c.entities.join(', ')}]` : ''}`)
+        .join('\n');
+
+      caseContext = `\n\n[CASE CONTEXT]\nPesan user mungkin related ke case:\n${caseSuggestions}\nJika relevan, mention case tersebut atau tanya apakah ini update untuk case itu.`;
+    }
+
     const geminiResult = await askGemini(pesan, {
       mode,
       events,
@@ -562,6 +613,7 @@ async function handleChatMessage(body, res) {
       profileContext,
       responseMode,
       chatType,
+      caseContext,
     });
 
     const geminiMeta = geminiResult?.meta || null;

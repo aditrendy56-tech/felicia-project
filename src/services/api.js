@@ -90,6 +90,11 @@ export async function getCasesAction(status = 'active') {
   return post('/chat', { action: 'get_cases', params: { status } });
 }
 
+// ✨ Phase 2: Get case suggestions
+export async function getCaseSuggestions(message) {
+  return post('/chat', { action: 'get_case_suggestions', params: { message } });
+}
+
 /* ── Quota ── */
 
 export async function getQuotaStatus() {

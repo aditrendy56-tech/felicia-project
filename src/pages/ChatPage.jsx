@@ -10,6 +10,7 @@ import {
   sendChat,
   renameThread,
   getQuotaEta,
+  getCaseSuggestions,
 } from '../services/api';
 import './ChatPage.css';
 
@@ -30,6 +31,8 @@ export default function ChatPage() {
   const [loadingThreads, setLoadingThreads] = useState(true);
   const [quota, setQuota] = useState(null);
   const [sideOpen, setSideOpen] = useState(true);
+  const [caseSuggestions, setCaseSuggestions] = useState([]);
+  const [showCaseSuggestions, setShowCaseSuggestions] = useState(false);
   const msgEnd = useRef(null);
   const inputRef = useRef(null);
 
@@ -68,6 +71,29 @@ export default function ChatPage() {
     if (window.innerWidth <= 768) setSideOpen(false);
     setTimeout(() => inputRef.current?.focus(), 100);
   }, []);
+
+  // ✨ Phase 2: Analyze case suggestions when typing
+  useEffect(() => {
+    if (input.length > 10) {
+      const timer = setTimeout(async () => {
+        try {
+          const result = await getCaseSuggestions(input);
+          if (result?.suggestions && result.suggestions.length > 0) {
+            setCaseSuggestions(result.suggestions);
+            setShowCaseSuggestions(true);
+          } else {
+            setShowCaseSuggestions(false);
+          }
+        } catch (err) {
+          console.error('Error getting case suggestions:', err);
+          setShowCaseSuggestions(false);
+        }
+      }, 500);
+      return () => clearTimeout(timer);
+    } else {
+      setShowCaseSuggestions(false);
+    }
+  }, [input]);
 
   async function handleNewThread() {
     try {
@@ -295,6 +321,42 @@ export default function ChatPage() {
               ➤
             </button>
           </div>
+
+          {/* ✨ Phase 2: Case Suggestions Panel */}
+          {showCaseSuggestions && caseSuggestions.length > 0 && (
+            <div className="case-suggestions-panel">
+              <div className="suggestions-header">
+                <span>🎯 Possible Cases ({caseSuggestions.length}):</span>
+                <button className="btn-close" onClick={() => setShowCaseSuggestions(false)}>✕</button>
+              </div>
+              <div className="suggestions-list">
+                {caseSuggestions.map(cs => (
+                  <div key={cs.id} className="suggestion-item">
+                    <div className="suggestion-content">
+                      <div className="suggestion-title">{cs.title}</div>
+                      <div className="suggestion-meta">
+                        <span className="suggestion-category">{cs.category}</span>
+                        {cs.entities && cs.entities.length > 0 && (
+                          <span className="suggestion-entities">{cs.entities.join(', ')}</span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      className="btn btn-sm btn-outline"
+                      onClick={() => {
+                        setInput(prev => prev + ` [case: ${cs.title}]`);
+                        setShowCaseSuggestions(false);
+                      }}
+                      title="Add to message"
+                    >
+                      Link
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="chat-input-hint">Enter kirim · Shift+Enter baris baru</div>
         </div>
       </div>

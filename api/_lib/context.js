@@ -45,7 +45,7 @@ export function getTanggalHariIni() {
  * System prompt lengkap untuk Gemini — Two Layer Architecture
  * Sekarang support chatType: utama | refleksi | strategi
  */
-export function buildSystemPrompt(modeAktif = null, eventsHariIni = [], memories = [], profileContext = null, chatType = 'utama') {
+export function buildSystemPrompt(modeAktif = null, eventsHariIni = [], memories = [], profileContext = null, chatType = 'utama', caseContext = '') {
   const hari = getHariIni();
   const tipeHari = getTipeHari();
   const tanggal = getTanggalHariIni();
@@ -192,6 +192,7 @@ Detail params per action:
 
 [GAYA KOMUNIKASI — ${chatTypeTone.label}]
 ${chatTypeTone.instruction}
+${caseContext}
 `.trim();
 }
 
