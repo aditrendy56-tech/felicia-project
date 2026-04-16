@@ -78,6 +78,24 @@ export default async function handler(req, res) {
   if (routeAction === 'rename_thread') {
     return handleRenameThread(body, res);
   }
+  if (routeAction === 'save_memory') {
+    return handleSaveMemoryAction(body, res);
+  }
+  if (routeAction === 'get_events') {
+    return handleGetEventsAction(body, res);
+  }
+  if (routeAction === 'set_mode') {
+    return handleSetModeAction(body, res);
+  }
+  if (routeAction === 'create_event') {
+    return handleCreateEventAction(body, res);
+  }
+  if (routeAction === 'delete_event') {
+    return handleDeleteEventAction(body, res);
+  }
+  if (routeAction === 'reschedule') {
+    return handleRescheduleAction(body, res);
+  }
 
   // Default: chat message
   return handleChatMessage(body, res);
@@ -148,6 +166,226 @@ async function handleRenameThread(body, res) {
   } catch (err) {
     console.error('[Chat] renameThread error:', err);
     return res.status(500).json({ error: 'Gagal rename thread.' });
+  }
+}
+
+async function handleSaveMemoryAction(body, res) {
+  try {
+    const params = body.params || {};
+    const rawContent = typeof params.content === 'string' ? params.content : body.content;
+    const content = typeof rawContent === 'string' ? rawContent.trim() : '';
+    const category = typeof params.category === 'string'
+      ? params.category
+      : (typeof body.category === 'string' ? body.category : 'general');
+    const chatType = VALID_CHAT_TYPES.includes(body.chatType) ? body.chatType : 'utama';
+
+    if (!content) {
+      return res.status(400).json({ error: 'Field "content" wajib diisi.' });
+    }
+
+    const [knownMemories, canonicalProfile] = await Promise.all([
+      safeAsync(() => getScopedMemories(chatType, 20), []),
+      safeAsync(getCanonicalProfile, DEFAULT_PROFILE_FACTS),
+    ]);
+
+    const memoryDecision = await decideMemorySave(
+      { category, content },
+      knownMemories,
+      `ingat ya: ${content}`,
+      canonicalProfile
+    );
+
+    if (!memoryDecision.shouldSave) {
+      return res.status(200).json({
+        ok: true,
+        saved: false,
+        note: memoryDecision.userNote || buildDuplicateMemoryFeedback(content),
+      });
+    }
+
+    await saveMemory(memoryDecision.memoryToSave);
+
+    await safeAsync(() => logCommand({
+      userId: 'web-chat',
+      command: 'save_memory_direct',
+      input: content,
+      action: 'save_memory',
+      response: (memoryDecision.userNote || 'Memory disimpan').substring(0, 200),
+      status: 'success',
+    }));
+
+    return res.status(200).json({
+      ok: true,
+      saved: true,
+      note: memoryDecision.userNote,
+      memory: memoryDecision.memoryToSave,
+    });
+  } catch (err) {
+    console.error('[Chat] saveMemoryAction error:', err);
+    return res.status(500).json({ error: 'Gagal menyimpan memory.' });
+  }
+}
+
+async function handleGetEventsAction(body, res) {
+  try {
+    const params = body.params || {};
+    const date = typeof params.date === 'string' && params.date.trim().length > 0
+      ? params.date.trim()
+      : null;
+
+    const events = date
+      ? await safeAsync(() => getEventsDate(date), [])
+      : await safeAsync(getEventsToday, []);
+
+    return res.status(200).json({
+      ok: true,
+      date,
+      events: Array.isArray(events) ? events : [],
+    });
+  } catch (err) {
+    console.error('[Chat] getEventsAction error:', err);
+    return res.status(500).json({ error: 'Gagal mengambil data jadwal.' });
+  }
+}
+
+async function handleSetModeAction(body, res) {
+  try {
+    const params = body.params || {};
+    const mode = typeof params.mode === 'string' ? params.mode.trim() : body.mode;
+
+    if (!mode) {
+      return res.status(400).json({ error: 'Field "mode" wajib diisi.' });
+    }
+
+    const result = await activateMode(mode);
+
+    await safeAsync(() => logCommand({
+      userId: 'web-chat',
+      command: 'set_mode_direct',
+      input: mode,
+      action: 'set_mode',
+      response: result.message.substring(0, 200),
+      status: result.success ? 'success' : 'error',
+    }));
+
+    return res.status(200).json({
+      ok: result.success,
+      message: result.message,
+      changes: result.changes || [],
+    });
+  } catch (err) {
+    console.error('[Chat] setModeAction error:', err);
+    return res.status(500).json({ error: 'Gagal mengaktifkan mode.' });
+  }
+}
+
+async function handleCreateEventAction(body, res) {
+  try {
+    const params = body.params || {};
+    const summary = typeof params.summary === 'string' ? params.summary.trim() : '';
+    const startTime = typeof params.startTime === 'string' ? params.startTime.trim() : '';
+    const endTime = typeof params.endTime === 'string' ? params.endTime.trim() : '';
+    const description = typeof params.description === 'string' ? params.description.trim() : '';
+
+    if (!summary || !startTime || !endTime) {
+      return res.status(400).json({ error: 'Field summary, startTime, endTime wajib diisi.' });
+    }
+
+    const event = await createEvent(summary, startTime, endTime, description);
+
+    if (!event) {
+      return res.status(500).json({ error: 'Gagal membuat event di Google Calendar.' });
+    }
+
+    await safeAsync(() => logCommand({
+      userId: 'web-chat',
+      command: 'create_event_direct',
+      input: summary,
+      action: 'create_event',
+      response: `Event "${summary}" berhasil dibuat`.substring(0, 200),
+      status: 'success',
+    }));
+
+    return res.status(200).json({
+      ok: true,
+      event,
+      message: `✅ Event "${summary}" berhasil ditambahkan ke Google Calendar!`,
+    });
+  } catch (err) {
+    console.error('[Chat] createEventAction error:', err);
+    return res.status(500).json({ error: 'Gagal membuat event.' });
+  }
+}
+
+async function handleDeleteEventAction(body, res) {
+  try {
+    const params = body.params || {};
+    const eventId = typeof params.eventId === 'string' ? params.eventId.trim() : '';
+
+    if (!eventId) {
+      return res.status(400).json({ error: 'Field "eventId" wajib diisi.' });
+    }
+
+    const deleted = await deleteEvent(eventId);
+
+    if (!deleted) {
+      return res.status(500).json({ error: 'Gagal menghapus event dari Google Calendar.' });
+    }
+
+    await safeAsync(() => logCommand({
+      userId: 'web-chat',
+      command: 'delete_event_direct',
+      input: eventId,
+      action: 'delete_event',
+      response: 'Event berhasil dihapus',
+      status: 'success',
+    }));
+
+    return res.status(200).json({
+      ok: true,
+      message: '✅ Event berhasil dihapus dari Google Calendar!',
+    });
+  } catch (err) {
+    console.error('[Chat] deleteEventAction error:', err);
+    return res.status(500).json({ error: 'Gagal menghapus event.' });
+  }
+}
+
+async function handleRescheduleAction(body, res) {
+  try {
+    const params = body.params || {};
+    const eventId = typeof params.eventId === 'string' ? params.eventId.trim() : '';
+    const startTime = typeof params.startTime === 'string' ? params.startTime.trim() : '';
+    const endTime = typeof params.endTime === 'string' ? params.endTime.trim() : '';
+    const summary = typeof params.summary === 'string' ? params.summary.trim() : '';
+
+    if (!eventId || !startTime || !endTime) {
+      return res.status(400).json({ error: 'Field eventId, startTime, endTime wajib diisi.' });
+    }
+
+    const updated = await updateEvent(eventId, { startTime, endTime, summary: summary || undefined });
+
+    if (!updated) {
+      return res.status(500).json({ error: 'Gagal reschedule event di Google Calendar.' });
+    }
+
+    await safeAsync(() => logCommand({
+      userId: 'web-chat',
+      command: 'reschedule_direct',
+      input: eventId,
+      action: 'reschedule',
+      response: `Event berhasil di-reschedule ke ${startTime}—${endTime}`.substring(0, 200),
+      status: 'success',
+    }));
+
+    return res.status(200).json({
+      ok: true,
+      event: updated,
+      message: `✅ Event berhasil di-reschedule ke ${updated.start}—${updated.end}!`,
+    });
+  } catch (err) {
+    console.error('[Chat] rescheduleAction error:', err);
+    return res.status(500).json({ error: 'Gagal reschedule event.' });
   }
 }
 

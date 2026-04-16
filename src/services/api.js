@@ -56,6 +56,30 @@ export async function renameThread(threadId, title) {
   return post('/chat', { action: 'rename_thread', threadId, title });
 }
 
+export async function saveMemory({ content, category = 'general' }) {
+  return post('/chat', { action: 'save_memory', params: { content, category } });
+}
+
+export async function getEvents(date = null) {
+  return post('/chat', { action: 'get_events', params: { date } });
+}
+
+export async function setMode(mode) {
+  return post('/chat', { action: 'set_mode', params: { mode } });
+}
+
+export async function createEventAction({ summary, startTime, endTime, description = '' }) {
+  return post('/chat', { action: 'create_event', params: { summary, startTime, endTime, description } });
+}
+
+export async function deleteEventAction(eventId) {
+  return post('/chat', { action: 'delete_event', params: { eventId } });
+}
+
+export async function rescheduleEventAction({ eventId, startTime, endTime, summary = '' }) {
+  return post('/chat', { action: 'reschedule', params: { eventId, startTime, endTime, summary } });
+}
+
 /* ── Quota ── */
 
 export async function getQuotaStatus() {

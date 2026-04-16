@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import PageHeader from '../components/PageHeader';
-import { sendChat, getQuotaEta } from '../services/api';
+import { sendChat, getQuotaEta, setMode } from '../services/api';
 import './TodayPage.css';
 
 function getGreeting() {
@@ -24,6 +24,8 @@ export default function TodayPage() {
   const [quickInput, setQuickInput] = useState('');
   const [quickReply, setQuickReply] = useState('');
   const [quickLoading, setQuickLoading] = useState(false);
+  const [modeLoading, setModeLoading] = useState(false);
+  const [modeMsg, setModeMsg] = useState('');
 
   useEffect(() => {
     // Fetch today's schedule
@@ -58,6 +60,21 @@ export default function TodayPage() {
     }
   }
 
+  async function handleSetMode(modeName) {
+    if (modeLoading) return;
+    setModeLoading(true);
+    setModeMsg('');
+    try {
+      const result = await setMode(modeName);
+      setModeMsg(result?.message || `Mode ${modeName} diaktifkan.`);
+      setTimeout(() => setModeMsg(''), 4000);
+    } catch (err) {
+      setModeMsg(`❌ Gagal aktivasi mode: ${err.message}`);
+    } finally {
+      setModeLoading(false);
+    }
+  }
+
   return (
     <div className="today-page page-active">
       <PageHeader
@@ -88,13 +105,17 @@ export default function TodayPage() {
 
         {/* ── Quick Actions ── */}
         <div className="card today-card quick-card">
-          <div className="card-title">⚡ Quick Actions</div>
+          <div className="card-title">⚡ Quick Mode Actions</div>
           <div className="quick-buttons">
-            <button className="btn btn-ghost btn-sm" onClick={() => { setQuickInput('Status mode sekarang?'); }}>📊 Status</button>
-            <button className="btn btn-ghost btn-sm" onClick={() => { setQuickInput('Aktifin mode focus'); }}>🎯 Focus</button>
-            <button className="btn btn-ghost btn-sm" onClick={() => { setQuickInput('Aktifin mode drop'); }}>😮‍💨 Drop</button>
-            <button className="btn btn-ghost btn-sm" onClick={() => { setQuickInput('Tipe hari ini apa?'); }}>📋 Tipe Hari</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => handleSetMode('drop')} disabled={modeLoading}>😮‍💨 DROP</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => handleSetMode('chaos')} disabled={modeLoading}>🌀 CHAOS</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => handleSetMode('overwork')} disabled={modeLoading}>🛑 OVERWORK</button>
           </div>
+          {modeMsg && (
+            <div className="text-muted" style={{ fontSize: '0.8rem', marginTop: 8, padding: '6px 8px', background: 'var(--bg-hover)', borderRadius: 6 }}>
+              {modeMsg}
+            </div>
+          )}
         </div>
 
         {/* ── Tanya Felicia ── */}

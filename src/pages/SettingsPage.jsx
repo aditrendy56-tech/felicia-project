@@ -15,6 +15,9 @@ export default function SettingsPage() {
   });
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMsg, setProfileMsg] = useState('');
+  const quotaWindow = quotaStatus?.window || {};
+  const lastHourStats = quotaWindow.last_hour || {};
+  const last24hStats = quotaWindow.last_24h || {};
 
   useEffect(() => {
     Promise.all([
@@ -130,15 +133,15 @@ export default function SettingsPage() {
                 <>
                   <div className="quota-row">
                     <strong>Last hour:</strong>
-                    <span className="text-success">{quotaStatus.last_hour?.success || 0} success</span> ·
-                    <span className="text-warning">{quotaStatus.last_hour?.quota_limited || 0} quota</span> ·
-                    <span className="text-error">{quotaStatus.last_hour?.error || 0} error</span>
+                    <span className="text-success">{lastHourStats.success || 0} success</span> ·
+                    <span className="text-warning">{lastHourStats.quota_limited || 0} quota</span> ·
+                    <span className="text-error">{lastHourStats.error || 0} error</span>
                   </div>
                   <div className="quota-row">
                     <strong>Last 24h:</strong>
-                    <span className="text-success">{quotaStatus.last_24h?.success || 0} success</span> ·
-                    <span className="text-warning">{quotaStatus.last_24h?.quota_limited || 0} quota</span> ·
-                    <span className="text-error">{quotaStatus.last_24h?.error || 0} error</span>
+                    <span className="text-success">{last24hStats.success || 0} success</span> ·
+                    <span className="text-warning">{last24hStats.quota_limited || 0} quota</span> ·
+                    <span className="text-error">{last24hStats.error || 0} error</span>
                   </div>
                 </>
               )}

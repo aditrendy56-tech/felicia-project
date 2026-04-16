@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { convertTranscript, importMemoryItems } from '../services/api';
+import { convertTranscript, importMemoryItems, saveMemory } from '../services/api';
 import './ContextMemoryPanel.css';
 
 /* ── Example templates ── */
@@ -48,6 +48,13 @@ export default function ContextMemoryPanel({ isOpen, onClose }) {
   const [importLoading, setImportLoading] = useState(false);
   const [importMsg, setImportMsg] = useState('');
   const [importError, setImportError] = useState('');
+
+  /* ── Manual memory state ── */
+  const [manualCategory, setManualCategory] = useState('personal');
+  const [manualContent, setManualContent] = useState('');
+  const [manualLoading, setManualLoading] = useState(false);
+  const [manualMsg, setManualMsg] = useState('');
+  const [manualError, setManualError] = useState('');
 
   /* ── Toast ── */
   const [toast, setToast] = useState('');
@@ -119,6 +126,37 @@ export default function ContextMemoryPanel({ isOpen, onClose }) {
     }
   }
 
+  /* ── Manual save handler ── */
+  async function handleManualSave() {
+    const content = manualContent.trim();
+    if (!content) {
+      showToast('Isi memory tidak boleh kosong', true);
+      return;
+    }
+
+    setManualLoading(true);
+    setManualError('');
+    setManualMsg('');
+
+    try {
+      const result = await saveMemory({
+        content,
+        category: manualCategory,
+      });
+
+      const note = result?.note || 'Memory berhasil disimpan.';
+      setManualMsg(note);
+      setManualContent('');
+      showToast('Memory berhasil disimpan');
+    } catch (e) {
+      const msg = e?.message || 'Gagal menyimpan memory.';
+      setManualError(msg);
+      showToast(msg, true);
+    } finally {
+      setManualLoading(false);
+    }
+  }
+
   /* ── Active tab ── */
   const [tab, setTab] = useState('transcript');
 
@@ -140,6 +178,9 @@ export default function ContextMemoryPanel({ isOpen, onClose }) {
           </button>
           <button className={`cmp-tab ${tab === 'import' ? 'active' : ''}`} onClick={() => setTab('import')}>
             📥 Import JSON
+          </button>
+          <button className={`cmp-tab ${tab === 'manual' ? 'active' : ''}`} onClick={() => setTab('manual')}>
+            ✍️ Add Manual
           </button>
         </div>
 
@@ -269,6 +310,52 @@ export default function ContextMemoryPanel({ isOpen, onClose }) {
 
               {importError && <p className="cmp-error">{importError}</p>}
               {importMsg && <p className="cmp-success">{importMsg}</p>}
+            </div>
+          )}
+
+          {/* ── Tab: Manual Add ── */}
+          {tab === 'manual' && (
+            <div className="cmp-section">
+              <p className="cmp-desc">
+                Simpan memory tunggal secara langsung ke database. Cocok untuk fakta penting yang ingin dikunci cepat.
+              </p>
+
+              <div className="cmp-field" style={{ maxWidth: 260 }}>
+                <label className="cmp-label">Kategori</label>
+                <select
+                  className="input input-sm"
+                  value={manualCategory}
+                  onChange={(e) => setManualCategory(e.target.value)}
+                >
+                  <option value="personal">personal</option>
+                  <option value="identity">identity</option>
+                  <option value="goal">goal</option>
+                  <option value="event">event</option>
+                  <option value="preference">preference</option>
+                  <option value="general">general</option>
+                </select>
+              </div>
+
+              <div className="cmp-field">
+                <label className="cmp-label">Isi Memory</label>
+                <textarea
+                  className="cmp-textarea"
+                  placeholder="Contoh: Target income April final 11 juta"
+                  value={manualContent}
+                  onChange={(e) => setManualContent(e.target.value)}
+                />
+              </div>
+
+              <button
+                className="btn btn-primary"
+                onClick={handleManualSave}
+                disabled={manualLoading}
+              >
+                {manualLoading ? '⏳ Menyimpan…' : '💾 Simpan Memory'}
+              </button>
+
+              {manualError && <p className="cmp-error">{manualError}</p>}
+              {manualMsg && <p className="cmp-success">{manualMsg}</p>}
             </div>
           )}
         </div>
