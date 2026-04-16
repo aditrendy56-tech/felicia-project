@@ -56,8 +56,8 @@ export async function renameThread(threadId, title) {
   return post('/chat', { action: 'rename_thread', threadId, title });
 }
 
-export async function saveMemory({ content, category = 'general' }) {
-  return post('/chat', { action: 'save_memory', params: { content, category } });
+export async function saveMemory({ content, category = 'general', title = null }) {
+  return post('/chat', { action: 'save_memory', params: { content, category, title } });
 }
 
 export async function getEvents(date = null) {

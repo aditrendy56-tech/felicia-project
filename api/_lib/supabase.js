@@ -444,6 +444,7 @@ export async function checkDuplicateMemoryInDB(content, category = null) {
 export async function saveMemory({
   category,
   content,
+  title = null,
   topicKey = null,
   memoryType = null,
   source = 'chat',
@@ -457,6 +458,7 @@ export async function saveMemory({
     const extendedPayload = {
       category: category || 'general',
       content,
+      title,
       topic_key: topicKey,
       memory_type: memoryType,
       source,

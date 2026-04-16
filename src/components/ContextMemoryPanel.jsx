@@ -94,6 +94,7 @@ export default function ContextMemoryPanel({ isOpen, onClose }) {
 
   /* ── Manual memory state ── */
   const [manualCategory, setManualCategory] = useState('personal');
+  const [manualTitle, setManualTitle] = useState('');
   const [manualContent, setManualContent] = useState('');
   const [manualLoading, setManualLoading] = useState(false);
   const [manualMsg, setManualMsg] = useState('');
@@ -185,10 +186,12 @@ export default function ContextMemoryPanel({ isOpen, onClose }) {
       const result = await saveMemory({
         content,
         category: manualCategory,
+        title: manualTitle.trim() || null,
       });
 
       const note = result?.note || 'Memory berhasil disimpan.';
       setManualMsg(note);
+      setManualTitle('');
       setManualContent('');
       showToast('Memory berhasil disimpan');
     } catch (e) {
@@ -374,9 +377,21 @@ export default function ContextMemoryPanel({ isOpen, onClose }) {
                   <option value="identity">identity</option>
                   <option value="goal">goal</option>
                   <option value="event">event</option>
+                  <option value="strategy">strategy</option>
                   <option value="preference">preference</option>
                   <option value="general">general</option>
                 </select>
+              </div>
+
+              <div className="cmp-field">
+                <label className="cmp-label">Judul Konteks (opsional)</label>
+                <input
+                  className="input input-sm"
+                  type="text"
+                  placeholder="Contoh: Strategi Naikin Berat Badan"
+                  value={manualTitle}
+                  onChange={(e) => setManualTitle(e.target.value)}
+                />
               </div>
 
               <div className="cmp-field">

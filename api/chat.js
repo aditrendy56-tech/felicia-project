@@ -174,6 +174,7 @@ async function handleSaveMemoryAction(body, res) {
     const params = body.params || {};
     const rawContent = typeof params.content === 'string' ? params.content : body.content;
     const content = typeof rawContent === 'string' ? rawContent.trim() : '';
+    const title = typeof params.title === 'string' ? params.title.trim() : null;
     const category = typeof params.category === 'string'
       ? params.category
       : (typeof body.category === 'string' ? body.category : 'general');
@@ -203,7 +204,7 @@ async function handleSaveMemoryAction(body, res) {
       });
     }
 
-    await saveMemory(memoryDecision.memoryToSave);
+    await saveMemory({ ...memoryDecision.memoryToSave, title });
 
     await safeAsync(() => logCommand({
       userId: 'web-chat',
