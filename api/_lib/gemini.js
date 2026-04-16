@@ -15,7 +15,7 @@ const GEMINI_MODELS = [
   'gemini-1.5-flash-8b',    // lighter, ~1500 req/day — last resort
 ];
 
-const VALID_ACTIONS = ['create_event', 'delete_event', 'reschedule', 'set_mode', 'save_memory', 'get_events'];
+const VALID_ACTIONS = ['create_event', 'delete_event', 'reschedule', 'set_mode', 'save_memory', 'get_events', 'create_case_auto', 'update_case'];
 
 function getGenAI() {
   const apiKey = process.env.GEMINI_API_KEY;

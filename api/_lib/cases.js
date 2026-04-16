@@ -400,3 +400,155 @@ export async function getRelatedCases(caseId) {
     return [];
   }
 }
+
+/**
+ * ✨ Phase 3: Extract structured case data dari message (heuristic)
+ * Fallback ke simple parsing jika pattern match
+ */
+export async function extractCaseFromMessage(message) {
+  try {
+    const messageLower = message.toLowerCase();
+
+    // Heuristic patterns
+    // Pattern 1: "case [title]" atau "buat case [title]"
+    const casePattern = /(?:case|buat case)\s+(.+?)(?:\s*[:,.]|$)/i;
+    const caseMatch = message.match(casePattern);
+
+    // Pattern 2: "utang dengan [name]" → financial case
+    const utangPattern = /utang\s+(?:dengan|ke|sama)\s+(\w+)/i;
+    const utangMatch = message.match(utangPattern);
+
+    // Pattern 3: "percintaan [name]" → relationship case
+    const cintaPattern = /percintaan|hubungan\s+(?:dengan|ke)\s+(\w+)/i;
+    const cintaMatch = message.match(cintaPattern);
+
+    // Pattern 4: "project [name]" → work case
+    const projectPattern = /project\s+(.+?)(?:\s*[:,.]|$)/i;
+    const projectMatch = message.match(projectPattern);
+
+    let extracted = {
+      title: null,
+      category: 'general',
+      entities: [],
+      summary: message.slice(0, 150),
+    };
+
+    // Determine category + title based on pattern match
+    if (utangMatch) {
+      extracted.category = 'financial';
+      extracted.title = `Utang dengan ${utangMatch[1]}`;
+      extracted.entities = [utangMatch[1]];
+    } else if (cintaMatch) {
+      extracted.category = 'relationship';
+      extracted.title = `Percintaan dengan ${cintaMatch[1]}`;
+      extracted.entities = [cintaMatch[1]];
+    } else if (projectMatch) {
+      extracted.category = 'work';
+      extracted.title = `Project ${projectMatch[1]}`;
+      extracted.entities = extractEntities(projectMatch[1]);
+    } else if (caseMatch) {
+      extracted.title = caseMatch[1].trim();
+      extracted.entities = extractEntities(message);
+    }
+
+    // If still no title, try simple entity extraction
+    if (!extracted.title) {
+      const entities = extractEntities(message);
+      if (entities.length > 0) {
+        // Guess category from keywords
+        if (messageLower.includes('utang') || messageLower.includes('bayar')) {
+          extracted.category = 'financial';
+        } else if (messageLower.includes('cinta') || messageLower.includes('pacar')) {
+          extracted.category = 'relationship';
+        } else if (messageLower.includes('sakit') || messageLower.includes('kesehatan')) {
+          extracted.category = 'health';
+        } else if (messageLower.includes('kerja') || messageLower.includes('project')) {
+          extracted.category = 'work';
+        }
+        extracted.entities = entities;
+      }
+    }
+
+    return extracted.title ? extracted : null;
+  } catch (error) {
+    console.error('[Cases] Error extracting case from message:', error);
+    return null;
+  }
+}
+
+/**
+ * ✨ Phase 3: Detect apakah message adalah update ke case existing
+ */
+export async function detectCaseUpdate(message, activeCases = []) {
+  try {
+    const messageLower = message.toLowerCase();
+
+    for (const caseItem of activeCases) {
+      const caseTitle = caseItem.title.toLowerCase();
+      const caseEntities = (caseItem.entities || []).map(e => e.toLowerCase());
+
+      // Check jika message mention case title atau entities
+      if (messageLower.includes(caseTitle)) {
+        return {
+          isUpdate: true,
+          caseId: caseItem.id,
+          caseTitle: caseItem.title,
+          detail: message,
+        };
+      }
+
+      // Check entities
+      for (const entity of caseEntities) {
+        if (entity.length > 2 && messageLower.includes(entity)) {
+          // Double check: jangan false positive untuk common words
+          if (!['dan', 'yang', 'untuk', 'dengan', 'dari', 'ke', 'di'].includes(entity)) {
+            return {
+              isUpdate: true,
+              caseId: caseItem.id,
+              caseTitle: caseItem.title,
+              detail: message,
+            };
+          }
+        }
+      }
+    }
+
+    return { isUpdate: false };
+  } catch (error) {
+    console.error('[Cases] Error detecting case update:', error);
+    return { isUpdate: false };
+  }
+}
+
+/**
+ * ✨ Phase 3: Generate case summary untuk context injection
+ */
+export async function generateCaseSummary(caseId) {
+  try {
+    const caseData = await getCaseById(caseId);
+    if (!caseData) return null;
+
+    const detailCount = (caseData.details || []).length;
+    const lastDetail = caseData.details?.[caseData.details.length - 1];
+    const lastUpdate = lastDetail?.timestamp || caseData.updated_at;
+
+    const summary = {
+      id: caseData.id,
+      title: caseData.title,
+      category: caseData.category,
+      status: caseData.status,
+      entities: caseData.entities || [],
+      createdAt: caseData.created_at,
+      lastUpdate,
+      detailCount,
+      recentDetails: caseData.details?.slice(-3) || [],
+      progress: `${detailCount} update`,
+      summary: caseData.summary,
+    };
+
+    return summary;
+  } catch (error) {
+    console.error('[Cases] Error generating case summary:', error);
+    return null;
+  }
+}

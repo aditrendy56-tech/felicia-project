@@ -33,6 +33,9 @@ import {
   extractEntities,
   analyzeChatForCaseReference,
   getRelatedCases,
+  extractCaseFromMessage,
+  detectCaseUpdate,
+  generateCaseSummary,
 } from './_lib/cases.js';
 import { DEFAULT_PROFILE_FACTS, getCanonicalProfile } from './_lib/profile.js';
 
@@ -112,6 +115,12 @@ export default async function handler(req, res) {
   }
   if (routeAction === 'get_case_suggestions') {
     return handleGetCaseSuggestionsAction(body, res);
+  }
+  if (routeAction === 'create_case_auto') {
+    return handleCreateCaseAutoAction(body, res);
+  }
+  if (routeAction === 'update_case') {
+    return handleUpdateCaseAction(body, res);
   }
 
   // Default: chat message
@@ -503,6 +512,93 @@ async function handleGetCaseSuggestionsAction(body, res) {
   }
 }
 
+// ✨ Phase 3: Handle auto case creation
+async function handleCreateCaseAutoAction(body, res) {
+  try {
+    const params = body.params || {};
+    const title = typeof params.title === 'string' ? params.title.trim() : '';
+    const category = typeof params.category === 'string' ? params.category.trim() : 'general';
+    const summary = typeof params.summary === 'string' ? params.summary.trim() : '';
+    const entities = Array.isArray(params.entities) ? params.entities : [];
+
+    if (!title) {
+      return res.status(400).json({ error: 'Field "title" wajib diisi.' });
+    }
+
+    const newCase = await createCase({
+      title,
+      category,
+      entities,
+      summary,
+      details: [],
+      relatedMemories: [],
+    });
+
+    if (!newCase) {
+      return res.status(500).json({ error: 'Gagal membuat case baru.' });
+    }
+
+    await safeAsync(() => logCommand({
+      userId: 'web-chat',
+      command: 'create_case_auto',
+      input: title,
+      action: 'create_case_auto',
+      response: `Case "${title}" auto-created`,
+      status: 'success',
+    }));
+
+    return res.status(200).json({
+      ok: true,
+      case: newCase,
+      message: `✅ Case "${title}" berhasil dibuat!`,
+    });
+  } catch (err) {
+    console.error('[Chat] createCaseAutoAction error:', err);
+    return res.status(500).json({ error: 'Gagal membuat case.' });
+  }
+}
+
+// ✨ Phase 3: Handle case update
+async function handleUpdateCaseAction(body, res) {
+  try {
+    const params = body.params || {};
+    const caseId = typeof params.caseId === 'string' ? params.caseId : '';
+    const detail = typeof params.detail === 'string' ? params.detail.trim() : '';
+
+    if (!caseId || !detail) {
+      return res.status(400).json({ error: 'caseId dan detail wajib diisi.' });
+    }
+
+    const caseData = await getCaseById(caseId);
+    if (!caseData) {
+      return res.status(404).json({ error: 'Case tidak ditemukan.' });
+    }
+
+    const updated = await addCaseDetail(caseId, detail);
+    if (!updated) {
+      return res.status(500).json({ error: 'Gagal update case.' });
+    }
+
+    await safeAsync(() => logCommand({
+      userId: 'web-chat',
+      command: 'update_case',
+      input: caseData.title,
+      action: 'update_case',
+      response: `Case "${caseData.title}" updated`,
+      status: 'success',
+    }));
+
+    return res.status(200).json({
+      ok: true,
+      case: updated,
+      message: `✅ Case "${caseData.title}" berhasil diupdate!`,
+    });
+  } catch (err) {
+    console.error('[Chat] updateCaseAction error:', err);
+    return res.status(500).json({ error: 'Gagal update case.' });
+  }
+}
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // CHAT MESSAGE HANDLER
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -603,6 +699,13 @@ async function handleChatMessage(body, res) {
         .join('\n');
 
       caseContext = `\n\n[CASE CONTEXT]\nPesan user mungkin related ke case:\n${caseSuggestions}\nJika relevan, mention case tersebut atau tanya apakah ini update untuk case itu.`;
+    }
+
+    // ✨ Phase 3: Detect case update atau new case
+    const activeCases = await getCases('active');
+    const caseUpdateDetection = await detectCaseUpdate(pesan, activeCases);
+    if (caseUpdateDetection.isUpdate) {
+      caseContext += `\n\n[CASE UPDATE DETECTED] Pesan ini appear to be update untuk case "${caseUpdateDetection.caseTitle}". Jika ya, gunakan action: "update_case".`;
     }
 
     const geminiResult = await askGemini(pesan, {
