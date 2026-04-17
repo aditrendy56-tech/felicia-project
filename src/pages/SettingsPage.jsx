@@ -20,23 +20,37 @@ export default function SettingsPage() {
   const last24hStats = quotaWindow.last_24h || {};
 
   useEffect(() => {
-    Promise.all([
-      getQuotaStatus().catch(() => null),
-      getQuotaEta().catch(() => null),
-      getProfile().catch(() => null),
-    ]).then(([status, eta, profileData]) => {
+    let isMounted = true;
+
+    const loadQuota = async () => {
+      const [status, eta] = await Promise.all([
+        getQuotaStatus().catch(() => null),
+        getQuotaEta().catch(() => null),
+      ]);
+
+      if (!isMounted) return;
       setQuotaStatus(status);
       setQuotaEta(eta);
+      setLoadingQuota(false);
+    };
 
-      if (profileData?.profile) {
-        setProfileForm({
-          name: profileData.profile.name || '',
-          aliases: (profileData.profile.knownAliases || []).join(', '),
-          gender: profileData.profile.gender || '',
-          domicile: profileData.profile.domicile || '',
-        });
-      }
-    }).finally(() => setLoadingQuota(false));
+    loadQuota();
+    const timer = setInterval(loadQuota, 60_000);
+
+    getProfile().then((profileData) => {
+      if (!isMounted || !profileData?.profile) return;
+      setProfileForm({
+        name: profileData.profile.name || '',
+        aliases: (profileData.profile.knownAliases || []).join(', '),
+        gender: profileData.profile.gender || '',
+        domicile: profileData.profile.domicile || '',
+      });
+    }).catch(() => {});
+
+    return () => {
+      isMounted = false;
+      clearInterval(timer);
+    };
   }, []);
 
   async function handleSaveProfile() {

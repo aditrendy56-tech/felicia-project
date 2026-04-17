@@ -34,16 +34,36 @@ export function getSupabase() {
 const VALID_CHAT_TYPES = ['utama', 'refleksi', 'strategi'];
 
 /**
- * Buat thread percakapan baru
+ * Buat thread percakapan baru (dengan idempotency untuk mencegah duplicate threads pada concurrent create)
  * Table: felicia_chat_threads (id uuid, chat_type text, title text, last_message_at timestamptz, created_at timestamptz)
  */
-export async function createChatThread(chatType, title = null) {
+export async function createChatThread(chatType, title = null, idempotencyToken = null) {
   try {
     const supabase = getSupabase();
     if (!supabase) return null;
 
     const type = VALID_CHAT_TYPES.includes(chatType) ? chatType : 'utama';
     const autoTitle = title || generateDefaultTitle(type);
+    
+    // Generate idempotency token dari title + type jika tidak diberikan
+    const token = idempotencyToken || `thread_${type}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // Cek apakah thread dengan title + type sudah exist (recent 30 detik)
+    const now = new Date();
+    const thirtySecsAgo = new Date(now.getTime() - 30 * 1000).toISOString();
+    
+    const { data: existingThreads, error: checkError } = await supabase
+      .from('felicia_chat_threads')
+      .select('id, chat_type, title, created_at')
+      .eq('chat_type', type)
+      .eq('title', autoTitle)
+      .gte('created_at', thirtySecsAgo)
+      .limit(1);
+
+    if (!checkError && existingThreads && existingThreads.length > 0) {
+      console.log('[Supabase] createChatThread: existing thread found (idempotent), id:', existingThreads[0].id);
+      return existingThreads[0];
+    }
 
     const { data, error } = await supabase
       .from('felicia_chat_threads')
@@ -52,6 +72,23 @@ export async function createChatThread(chatType, title = null) {
       .single();
 
     if (error) {
+      // Handle UNIQUE constraint violation gracefully (concurrent create)
+      if (error.code === '23505') {
+        console.warn('[Supabase] createChatThread: duplicate detected, attempting recovery...');
+        const { data: recoveryData } = await supabase
+          .from('felicia_chat_threads')
+          .select('id, chat_type, title, created_at')
+          .eq('chat_type', type)
+          .eq('title', autoTitle)
+          .order('created_at', { ascending: false })
+          .limit(1);
+        
+        if (recoveryData && recoveryData.length > 0) {
+          console.log('[Supabase] createChatThread: recovery success, id:', recoveryData[0].id);
+          return recoveryData[0];
+        }
+      }
+
       console.error('[Supabase] createChatThread error:', error.message);
       return null;
     }
@@ -380,54 +417,94 @@ export async function getRecentConversations(limit = 20) {
 
 /**
  * Cek apakah konten memory sudah ada di DB (anti-duplicate serverless-safe)
- * Cocokkan dengan ILIKE untuk case-insensitive + trim whitespace
+ * Mendukung signature lama: (content, category)
+ * Signature baru: (content, { category, topicKey, lookbackDays, limit })
  */
-export async function checkDuplicateMemoryInDB(content, category = null) {
+export async function checkDuplicateMemoryInDB(content, options = null) {
   try {
     const supabase = getSupabase();
     if (!supabase) return false;
 
-    // Normalize: hapus STATE[...]/DELTA[...] prefix kalau ada
-    const normalized = String(content || '')
-      .replace(/^(STATE|DELTA)\[[^\]]+\]\s*/i, '')
-      .trim()
-      .toLowerCase();
+    const normalized = normalizeMemoryTextForMatch(content);
 
     if (!normalized) return false;
 
+    const parsedOptions = parseDuplicateCheckOptions(options);
+    const lookbackDays = Number.isFinite(parsedOptions.lookbackDays)
+      ? Math.max(1, Math.min(365, parsedOptions.lookbackDays))
+      : 180;
+    const limit = Number.isFinite(parsedOptions.limit)
+      ? Math.max(10, Math.min(300, parsedOptions.limit))
+      : 100;
+    const sinceIso = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000).toISOString();
+
     let query = supabase
       .from('felicia_memories')
-      .select('id, content')
-      .ilike('content', `%${normalized}%`)
-      .limit(5);
+      .select('id, category, content, topic_key, memory_type, created_at')
+      .gte('created_at', sinceIso)
+      .order('created_at', { ascending: false })
+      .limit(limit);
 
-    if (category) {
-      query = query.eq('category', category);
+    if (parsedOptions.category) {
+      query = query.eq('category', parsedOptions.category);
     }
 
-    const { data, error } = await query;
+    if (parsedOptions.topicKey) {
+      query = query.eq('topic_key', parsedOptions.topicKey);
+    }
+
+    let { data, error } = await query;
 
     if (error) {
-      console.error('[Supabase] checkDuplicateMemoryInDB error:', error.message);
-      return false;
+      if (!isSchemaColumnError(error)) {
+        console.error('[Supabase] checkDuplicateMemoryInDB error:', error.message);
+        return false;
+      }
+
+      let fallbackQuery = supabase
+        .from('felicia_memories')
+        .select('id, category, content, created_at')
+        .gte('created_at', sinceIso)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (parsedOptions.category) {
+        fallbackQuery = fallbackQuery.eq('category', parsedOptions.category);
+      }
+
+      const fallbackRes = await fallbackQuery;
+      if (fallbackRes.error) {
+        console.error('[Supabase] checkDuplicateMemoryInDB fallback error:', fallbackRes.error.message);
+        return false;
+      }
+
+      data = fallbackRes.data || [];
     }
 
     if (!data || data.length === 0) return false;
 
-    // Verifikasi lebih ketat: minimal 80% token overlap
     for (const row of data) {
-      const rowNorm = String(row.content || '')
-        .replace(/^(STATE|DELTA)\[[^\]]+\]\s*/i, '')
-        .trim()
-        .toLowerCase();
+      const rowNorm = normalizeMemoryTextForMatch(row?.content || '');
+      if (!rowNorm) continue;
 
-      const tokensA = new Set(normalized.split(/\s+/));
-      const tokensB = new Set(rowNorm.split(/\s+/));
-      const intersection = [...tokensA].filter(t => tokensB.has(t)).length;
-      const union = new Set([...tokensA, ...tokensB]).size;
-      const similarity = union > 0 ? intersection / union : 0;
+      if (rowNorm === normalized) {
+        return true;
+      }
 
-      if (similarity >= 0.8) return true;
+      if (Math.min(rowNorm.length, normalized.length) >= 18) {
+        if (rowNorm.includes(normalized) || normalized.includes(rowNorm)) {
+          return true;
+        }
+      }
+
+      const similarity = calcTokenSimilarityForMatch(rowNorm, normalized);
+      if (similarity >= 0.86) {
+        return true;
+      }
+
+      if (normalized.length <= 12 || rowNorm.length <= 12) {
+        continue;
+      }
     }
 
     return false;
@@ -435,6 +512,61 @@ export async function checkDuplicateMemoryInDB(content, category = null) {
     console.error('[Supabase] checkDuplicateMemoryInDB exception:', err);
     return false;
   }
+}
+
+function parseDuplicateCheckOptions(options) {
+  if (typeof options === 'string') {
+    return {
+      category: options,
+      topicKey: null,
+      lookbackDays: 180,
+      limit: 100,
+    };
+  }
+
+  if (!options || typeof options !== 'object') {
+    return {
+      category: null,
+      topicKey: null,
+      lookbackDays: 180,
+      limit: 100,
+    };
+  }
+
+  return {
+    category: typeof options.category === 'string' ? options.category : null,
+    topicKey: typeof options.topicKey === 'string' ? options.topicKey : null,
+    lookbackDays: Number(options.lookbackDays || 180),
+    limit: Number(options.limit || 100),
+  };
+}
+
+function normalizeMemoryTextForMatch(text) {
+  return String(text || '')
+    .replace(/^(STATE|DELTA)\[[^\]]+\]\s*/i, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function calcTokenSimilarityForMatch(leftText, rightText) {
+  const leftTokens = new Set(String(leftText || '').split(/\s+/).filter(token => token.length > 1));
+  const rightTokens = new Set(String(rightText || '').split(/\s+/).filter(token => token.length > 1));
+
+  if (leftTokens.size === 0 || rightTokens.size === 0) {
+    return 0;
+  }
+
+  let intersection = 0;
+  for (const token of leftTokens) {
+    if (rightTokens.has(token)) {
+      intersection += 1;
+    }
+  }
+
+  const union = new Set([...leftTokens, ...rightTokens]).size;
+  return union > 0 ? (intersection / union) : 0;
 }
 
 /**
@@ -450,23 +582,33 @@ export async function saveMemory({
   source = 'chat',
   version = null,
   supersedesId = null,
+  idempotencyToken = null,
 }) {
   try {
     const supabase = getSupabase();
     if (!supabase) return;
 
+    // Generate idempotency token jika tidak diberikan (mencegah concurrent duplicates)
+    const token = idempotencyToken || generateIdempotencyToken();
+    
+    // Normalize content untuk constraint unik (lowercase + trim + remove special chars)
+    const normalizedContent = normalizeContentForDedup(content);
+
     const extendedPayload = {
       category: category || 'general',
       content,
+      normalized_content: normalizedContent,
       title,
       topic_key: topicKey,
       memory_type: memoryType,
       source,
       version,
       supersedes_id: supersedesId,
+      idempotency_token: token,
+      attempt_count: 1,
     };
 
-    console.log('[Supabase] saveMemory attempt:', JSON.stringify(extendedPayload));
+    console.log('[Supabase] saveMemory attempt:', JSON.stringify({ ...extendedPayload, content: '...' }), 'token:', token);
 
     const { data: insertedData, error } = await supabase
       .from('felicia_memories')
@@ -474,8 +616,25 @@ export async function saveMemory({
       .select('id, category, content');
 
     if (!error) {
-      console.log('[Supabase] saveMemory success, id:', insertedData?.[0]?.id);
-      return;
+      console.log('[Supabase] saveMemory success, id:', insertedData?.[0]?.id, 'token:', token);
+      return insertedData?.[0];
+    }
+
+    // Handle UNIQUE constraint violation (duplicate) — return existing record instead
+    if (error.code === '23505') {
+      console.warn('[Supabase] saveMemory duplicate detected (UNIQUE constraint), attempting recovery...');
+      const existingRecord = await supabase
+        .from('felicia_memories')
+        .select('id, category, content')
+        .eq('normalized_content', normalizedContent)
+        .eq('category', category || 'general')
+        .eq('topic_key', topicKey)
+        .single();
+      
+      if (existingRecord.data) {
+        console.log('[Supabase] saveMemory duplicate recovery: returning existing id:', existingRecord.data.id);
+        return existingRecord.data;
+      }
     }
 
     console.error('[Supabase] saveMemory error:', error.code, error.message, error.details, error.hint);
@@ -484,20 +643,44 @@ export async function saveMemory({
       return;
     }
 
-    console.log('[Supabase] saveMemory fallback to minimal schema...');
+    console.log('[Supabase] saveMemory fallback to minimal schema (no idempotency)...');
     const { data: fallbackData, error: fallbackError } = await supabase
       .from('felicia_memories')
-      .insert({ category: category || 'general', content })
-      .select('id');
+      .insert({ 
+        category: category || 'general', 
+        content,
+        normalized_content: normalizedContent,
+      })
+      .select('id, category, content');
 
     if (fallbackError) {
       console.error('[Supabase] saveMemory fallback error:', fallbackError.code, fallbackError.message);
     } else {
       console.log('[Supabase] saveMemory fallback success, id:', fallbackData?.[0]?.id);
+      return fallbackData?.[0];
     }
   } catch (err) {
     console.error('[Supabase] saveMemory exception:', err);
   }
+}
+
+function generateIdempotencyToken() {
+  // Generate UUID v4 untuk idempotency token
+  // Format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+function normalizeContentForDedup(content) {
+  if (!content) return '';
+  return content
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s]/g, '') // remove special chars
+    .replace(/\s+/g, ' '); // normalize whitespace
 }
 
 /**

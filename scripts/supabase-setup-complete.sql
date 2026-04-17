@@ -31,11 +31,17 @@ SELECT 'Step 1 ✅: Trigger for felicia_cases created' AS status;
 -- STEP 2: Create felicia_case_links table untuk explicit relationships
 -- ════════════════════════════════════════════════════════════════
 
+-- Create ENUM type untuk link_type
+DO $$ BEGIN
+    CREATE TYPE link_type_enum AS ENUM ('related_to', 'parent_of', 'child_of', 'duplicate_of');
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
+
 CREATE TABLE IF NOT EXISTS felicia_case_links (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   case_a_id UUID NOT NULL REFERENCES felicia_cases(id) ON DELETE CASCADE,
   case_b_id UUID NOT NULL REFERENCES felicia_cases(id) ON DELETE CASCADE,
-  link_type TEXT NOT NULL CHECK (link_type IN ('related_to', 'parent_of', 'child_of', 'duplicate_of')),
+  link_type link_type_enum NOT NULL,
   reason TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   created_by TEXT DEFAULT 'system',
@@ -96,8 +102,7 @@ SELECT 'Step 4 ✅: case_stats view created' AS status;
 SELECT 
   'Tables Status' as check_name,
   EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='felicia_cases') as felicia_cases_exists,
-  EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='felicia_case_links') as felicia_case_links_exists
-AS result;
+  EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='felicia_case_links') as felicia_case_links_exists;
 
 -- Check triggers exist
 SELECT 'Triggers Status' as check_name,

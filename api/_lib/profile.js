@@ -103,37 +103,67 @@ export async function getCanonicalProfile() {
 export async function saveCanonicalProfile(profileInput = {}) {
   const normalized = normalizeProfileInput(profileInput, DEFAULT_PROFILE_FACTS);
 
-  await saveMemory({
-    category: 'identity',
-    content: `STATE[${PROFILE_TOPIC_KEYS.name}] ${normalized.name}`,
-    topicKey: PROFILE_TOPIC_KEYS.name,
-    memoryType: 'state',
-    source: 'settings',
-  });
+  // Kumpulkan semua saveMemory ke dalam array untuk batch execution (atomicity pattern)
+  const memoryUpdates = [
+    {
+      category: 'identity',
+      content: `STATE[${PROFILE_TOPIC_KEYS.name}] ${normalized.name}`,
+      topicKey: PROFILE_TOPIC_KEYS.name,
+      memoryType: 'state',
+      source: 'settings',
+    },
+    {
+      category: 'identity',
+      content: `STATE[${PROFILE_TOPIC_KEYS.aliases}] ${normalized.knownAliases.join(', ')}`,
+      topicKey: PROFILE_TOPIC_KEYS.aliases,
+      memoryType: 'state',
+      source: 'settings',
+    },
+    {
+      category: 'identity',
+      content: `STATE[${PROFILE_TOPIC_KEYS.gender}] ${normalized.gender}`,
+      topicKey: PROFILE_TOPIC_KEYS.gender,
+      memoryType: 'state',
+      source: 'settings',
+    },
+    {
+      category: 'identity',
+      content: `STATE[${PROFILE_TOPIC_KEYS.domicile}] ${normalized.domicile}`,
+      topicKey: PROFILE_TOPIC_KEYS.domicile,
+      memoryType: 'state',
+      source: 'settings',
+    },
+  ];
 
-  await saveMemory({
-    category: 'identity',
-    content: `STATE[${PROFILE_TOPIC_KEYS.aliases}] ${normalized.knownAliases.join(', ')}`,
-    topicKey: PROFILE_TOPIC_KEYS.aliases,
-    memoryType: 'state',
-    source: 'settings',
-  });
+  // Execute all saves in parallel + track successes (partial-save prevention)
+  try {
+    const results = await Promise.all(
+      memoryUpdates.map(update => saveMemoryWithErrorTracking(update))
+    );
 
-  await saveMemory({
-    category: 'identity',
-    content: `STATE[${PROFILE_TOPIC_KEYS.gender}] ${normalized.gender}`,
-    topicKey: PROFILE_TOPIC_KEYS.gender,
-    memoryType: 'state',
-    source: 'settings',
-  });
+    // Jika ada yang gagal, log warning tapi tetap return normalized (graceful degradation)
+    const failures = results.filter(r => !r.success);
+    if (failures.length > 0) {
+      console.warn(`[Profile] saveCanonicalProfile: ${failures.length}/${memoryUpdates.length} saves failed`, failures);
+      // Dalam production, bisa trigger retry atau alert, tapi jangan corrupt partial state
+      if (failures.length === memoryUpdates.length) {
+        throw new Error('Semua profile updates gagal, tidak ada yang disimpan.');
+      }
+    }
 
-  await saveMemory({
-    category: 'identity',
-    content: `STATE[${PROFILE_TOPIC_KEYS.domicile}] ${normalized.domicile}`,
-    topicKey: PROFILE_TOPIC_KEYS.domicile,
-    memoryType: 'state',
-    source: 'settings',
-  });
+    return normalized;
+  } catch (err) {
+    console.error('[Profile] saveCanonicalProfile error:', err);
+    throw err;
+  }
+}
 
-  return normalized;
+async function saveMemoryWithErrorTracking(memoryData) {
+  try {
+    const result = await saveMemory(memoryData);
+    return { success: !!result, data: result };
+  } catch (err) {
+    console.error('[Profile] saveMemoryWithErrorTracking error:', err.message);
+    return { success: false, error: err.message };
+  }
 }

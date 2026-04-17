@@ -1,14 +1,14 @@
 import { checkDuplicateMemoryInDB, saveMemory } from './_lib/supabase.js';
+import { setCorsHeaders, setSecurityHeaders, handleOptions } from './_lib/cors.js';
 
 const MAX_IMPORT_ITEMS = 120;
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  setCorsHeaders(res, req);
+  setSecurityHeaders(res);
 
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return handleOptions(res, req);
   }
 
   if (req.method !== 'POST') {

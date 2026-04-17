@@ -1,17 +1,44 @@
 /* ━━━ Felicia API Service ━━━ */
 
 const API_BASE = '/api';
-const TOKEN = 'b4d7e36bac038cd0d22c93a1d741159615908f1a87ee8fd3c25dce52c0002a19';
 
-const headers = {
-  'Content-Type': 'application/json',
-  Authorization: `Bearer ${TOKEN}`,
-};
+/**
+ * Build headers dengan token aman
+ * Coba fetch dari session/env dulu, fallback ke API_SECRET jika ada
+ */
+function buildHeaders() {
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+
+  const token = getSessionToken();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  return headers;
+}
+
+/**
+ * Ambil session token dari sessionStorage atau environment
+ */
+function getSessionToken() {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const stored = sessionStorage.getItem('felicia_api_token');
+    if (stored) return stored;
+  } catch (e) {
+    console.warn('[API] sessionStorage error:', e.message);
+  }
+
+  return process.env.VITE_API_TOKEN || null;
+}
 
 async function post(path, body = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
-    headers,
+    headers: buildHeaders(),
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -22,7 +49,7 @@ async function post(path, body = {}) {
 }
 
 async function get(path) {
-  const res = await fetch(`${API_BASE}${path}`, { headers });
+  const res = await fetch(`${API_BASE}${path}`, { headers: buildHeaders() });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error || `HTTP ${res.status}`);

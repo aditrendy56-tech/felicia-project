@@ -4,6 +4,7 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 import { askGemini } from './_lib/gemini.js';
+import { setCorsHeaders, setSecurityHeaders, handleOptions } from './_lib/cors.js';
 import {
   getEventsToday,
   getEventsDate,
@@ -50,13 +51,12 @@ const VALID_CHAT_TYPES = ['utama', 'refleksi', 'strategi'];
  * Supports: chat messages, thread management (list/create/delete)
  */
 export default async function handler(req, res) {
-  // ─── CORS headers ───
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  // ─── CORS & Security headers ───
+  setCorsHeaders(res, req);
+  setSecurityHeaders(res);
 
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return handleOptions(res, req);
   }
 
   if (req.method !== 'POST') {
@@ -232,7 +232,8 @@ async function handleSaveMemoryAction(body, res) {
       });
     }
 
-    await saveMemory({ ...memoryDecision.memoryToSave, title });
+    const idempotencyToken = generateIdempotencyTokenLocal();
+    await saveMemory({ ...memoryDecision.memoryToSave, title, idempotencyToken });
 
     await safeAsync(() => logCommand({
       userId: 'web-chat',
@@ -926,7 +927,8 @@ async function executeAction(action, params, currentEvents, userMessage = '', kn
             return memoryDecision.userNote || buildDuplicateMemoryFeedback(params.content);
           }
 
-          await saveMemory(memoryDecision.memoryToSave);
+          const idempotencyToken = generateIdempotencyTokenLocal();
+          await saveMemory({ ...memoryDecision.memoryToSave, idempotencyToken });
           return memoryDecision.userNote;
         }
         return null;
@@ -1119,9 +1121,11 @@ async function decideMemorySave(memoryInput, knownMemories = [], userMessage = '
     };
   }
 
+  const topicKey = buildMemoryTopicKey(content, category);
+
   // Layer 2: cek langsung ke DB — mencegah race condition di serverless
   // Ini handle kasus: request ke-2 datang sebelum getRecentMemories() sempat baca record dari request ke-1
-  const existsInDB = await checkDuplicateMemoryInDB(content, category);
+  const existsInDB = await checkDuplicateMemoryInDB(content, { category, topicKey });
   if (existsInDB) {
     return {
       shouldSave: false,
@@ -1130,12 +1134,13 @@ async function decideMemorySave(memoryInput, knownMemories = [], userMessage = '
     };
   }
 
-  const topicKey = buildMemoryTopicKey(content, category);
   const relatedMemory = findRelatedMemoryByTopic(knownMemories, topicKey, category);
   const memoryType = relatedMemory && hasChangeSignal(content) ? 'delta' : 'state';
   const structuredContent = addMemoryStructureTag(content, topicKey, memoryType);
   const relatedVersion = Number(relatedMemory?.version || 0);
   const nextVersion = relatedVersion > 0 ? relatedVersion + 1 : 1;
+
+  const idempotencyToken = generateIdempotencyTokenLocal();
 
   return {
     shouldSave: true,
@@ -1147,11 +1152,21 @@ async function decideMemorySave(memoryInput, knownMemories = [], userMessage = '
       source: 'chat',
       version: nextVersion,
       supersedesId: memoryType === 'state' ? (relatedMemory?.id || null) : null,
+      idempotencyToken,
     },
     userNote: memoryType === 'delta'
       ? '📈 Noted Adit, ini Felicia simpan sebagai perkembangan baru dari poin sebelumnya.'
       : '🧠 Oke Adit, Felicia simpan itu sebagai konteks utama terbaru.',
   };
+}
+
+function generateIdempotencyTokenLocal() {
+  // Generate UUID v4 style token (browser-compatible)
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }
 
 function buildMemoryTopicKey(content, category = 'general') {
