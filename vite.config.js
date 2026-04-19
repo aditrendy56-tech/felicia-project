@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+const apiProxyTarget = process.env.VITE_API_PROXY_TARGET || 'https://felicia.vercel.app';
+
 export default defineConfig({
   plugins: [react()],
   root: '.',
@@ -10,7 +12,10 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': 'http://localhost:3000',
+      '/api': {
+        target: apiProxyTarget,
+        changeOrigin: true,
+      },
     },
   },
 });

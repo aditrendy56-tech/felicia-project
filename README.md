@@ -92,6 +92,13 @@ npm install
 npm run dev
 ```
 
+Opsional jika mau pakai backend lokal (bukan API Vercel), set env berikut sebelum `npm run dev`:
+
+```powershell
+$env:VITE_API_PROXY_TARGET="http://localhost:3000"
+npm run dev
+```
+
 Build produksi:
 
 ```powershell

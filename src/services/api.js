@@ -28,11 +28,14 @@ function getSessionToken() {
   try {
     const stored = sessionStorage.getItem('felicia_api_token');
     if (stored) return stored;
+
+    const localStored = localStorage.getItem('felicia_api_token');
+    if (localStored) return localStored;
   } catch (e) {
     console.warn('[API] sessionStorage error:', e.message);
   }
 
-  return process.env.VITE_API_TOKEN || null;
+  return import.meta.env.VITE_API_TOKEN || null;
 }
 
 async function post(path, body = {}) {

@@ -10,6 +10,7 @@
 
 1. [System Overview](#1-system-overview)
 2. [Layer 0: Data & Identity](#2-layer-0-data--identity)
+    - [2.1 Personal Identity Layer](#21-personal-identity-layer)
 3. [Layer 1: AI Brain](#3-layer-1-ai-brain)
 4. [Layer 2: Backend API](#4-layer-2-backend-api)
 5. [Layer 3: Frontend](#5-layer-3-frontend)
@@ -17,6 +18,23 @@
 7. [Implementation Status](#7-implementation-status)
 8. [Roadmap & Priorities](#8-roadmap--priorities)
 9. [Integration Points](#9-integration-points)
+10. [Repository Pattern & Scalability](#10-repository-pattern--scalability)
+11. [Error Handling & Recovery](#11-error-handling--recovery)
+12. [Security Baseline](#12-security-baseline)
+13. [Decision Matrix](#13-decision-matrix)
+14. [⚠️ Clarification: Phase Naming Correction](#clarification-phase-naming-correction)
+15. [🧠 Phase 2: Brain & Personality (Revised)](#-phase-2-brain--personality-revised)
+    - [2A. Seed Memory](#2a-seed-memory)
+    - [2B. Persona System](#2b-persona-system)
+    - [2C. Context Awareness](#2c-context-awareness)
+    - [2D. Case Management](#2d-case-management)
+16. [🔲 Phase 3: Web Dashboard Proper](#-phase-3-web-dashboard-proper)
+17. [🔲 Phase 4: Voice Layer](#-phase-4-voice-layer)
+18. [✅ Smoke Test Status](#-smoke-test-status-gate-sebelum-lanjut)
+19. [📋 Revised Next Steps](#-revised-next-steps-dikoreksi-18-april-2026)
+20. [🎯 Success Metrics Yang Sebenarnya](#-success-metrics-yang-sebenarnya)
+21. [🔑 Prinsip Yang Tidak Boleh Dilupakan](#-prinsip-yang-tidak-boleh-dilupakan)
+22. [Update History](#14-update-history-non-breaking)
 
 ---
 
@@ -140,6 +158,40 @@ transaction_type = 'income' | 'expense'
 - ✅ Retention policy (auto-delete old ephemeral data)
 - → Encryption layer (planned Phase 4)
 - → Access control (planned Phase 3b)
+
+### 2.1 Personal Identity Layer
+
+Bagian ini menyimpan **siapa Felicia ini untuk Adit**, bukan cuma data mentah.
+
+#### Visi
+- Felicia jadi sistem personal yang paham konteks hidup Adit dari waktu ke waktu.
+- Felicia tidak cuma menjawab chat, tapi membantu berpikir, mengingat, dan mengelola hidup.
+- Semua keputusan penting tetap bisa dilacak, dipelajari, dan di-reflect ulang.
+
+#### Misi
+- Menyimpan fakta diri, preferensi, kebiasaan, target, relasi, dan kejadian penting.
+- Membangun memori personal yang bisa berkembang, bukan hanya statis.
+- Membantu analisis diri, manajemen hidup, dan keputusan harian dengan konteks yang konsisten.
+- Menjaga agar personalisasi tidak hilang walau endpoint, UI, atau backend berubah.
+
+#### Yang Harus Diingat Sistem
+- Gaya komunikasi yang Adit suka.
+- Tujuan hidup jangka pendek dan panjang.
+- Pola kerja, pola tunda, energi, dan kebiasaan.
+- Relasi penting dan konteks masing-masing orang.
+- Hal yang sensitif, berulang, atau sering berubah.
+
+#### Data yang Relevan
+- `felicia_profiles` → identitas inti, fakta tetap, state dinamis.
+- `felicia_memories` → preferensi, kebiasaan, insight personal.
+- `felicia_goals` → target dan progres.
+- `felicia_cases` → masalah, konteks, dan situasi berjalan.
+- `felicia_events` → jadwal dan kejadian nyata.
+
+#### Implikasi Teknis
+- Layer ini perlu dibaca saat bikin prompt, keputusan, dan rekomendasi.
+- Layer ini jadi dasar untuk analisis diri, refleksi, dan adaptasi gaya respon.
+- Kalau nanti ada repository pattern, layer ini tetap jadi kontrak domain yang tidak berubah.
 
 ---
 
@@ -793,6 +845,61 @@ Layer 2 (Backend)
        └─→ Return text + action result to Layer 3
 ```
 
+### Current vs Next Phase (Simple View)
+
+**Sekarang:**
+```
+┌───────────────┐
+│   UI Page     │
+└──────┬────────┘
+       ↓
+┌────────────────────┐
+│ src/services/api.js │
+└──────┬─────────────┘
+       ↓
+┌────────────────────┐
+│   api/chat.js      │
+│ (satu pintu besar) │
+└──────┬─────────────┘
+       ↓
+┌──────────────────────────┐
+│ Supabase / Gemini / Cal. │
+└──────────────────────────┘
+```
+
+**Nanti kalau split backend + repository pattern:**
+```
+┌───────────────┐
+│   UI Page     │
+└──────┬────────┘
+       ↓
+┌────────────────────┐
+│ src/services/api.js │
+└──────┬─────────────┘
+       ↓
+┌─────────────────────────────────────────────┐
+│ api/chat.js | api/memory.js | api/cases.js │
+│             | api/profile.js                │
+└──────┬──────────────────────────────────────┘
+       ↓
+┌──────────────────────────┐
+│ Service layer per fitur  │
+└──────┬───────────────────┘
+       ↓
+┌──────────────────────────┐
+│ Repository layer per data│
+└──────┬───────────────────┘
+       ↓
+┌──────────────────────────┐
+│ Supabase / cache / API   │
+└──────────────────────────┘
+```
+
+**Artinya buat project ini:**
+- Kalau endpoint memory pindah, UI tetap panggil `saveMemory()` dari `src/services/api.js`.
+- Kalau query cases berubah, cukup ubah repository/service terkait.
+- Kalau nanti mau tambah cache, tinggal sisip di service/repository tanpa bongkar semua halaman.
+
 ### Case System Integration
 
 **Chat Integration:**
@@ -934,6 +1041,247 @@ DISCORD_TOKEN=
 - **Best for intelligence:** Option A (smart case features)
 - **Best for insights:** Option B (analytics)
 - **Best for future:** Option D (voice prep)
+
+---
+
+## ⚠️ CLARIFICATION: PHASE NAMING CORRECTION
+
+> Section ini meluruskan inkonsistensi antara visi awal dan implementasi Copilot.
+
+### Masalah
+Copilot menamai Case Management sebagai "Phase 2 & 3", padahal visi awal Adit memiliki roadmap berbeda. Ini menyebabkan **Persona System — yang merupakan inti visi Felicia Project — tidak pernah masuk ke arsitektur resmi.**
+
+### Koreksi Penamaan
+
+| Phase Lama (Copilot) | Phase Baru (Dikoreksi) | Status |
+|---|---|---|
+| Phase 1: Personal MVP | Phase 1: Personal MVP | ✅ Complete |
+| Phase 2: Case Management Part A | Phase 2: Brain & Personality | ⏳ **BELUM SELESAI** |
+| Phase 3: Case Management Part B | Phase 3: Web Dashboard Proper | 🔲 Planned |
+| Phase 4: Advanced Intelligence | Phase 4: Voice Layer | 🔲 Planned |
+| Phase 5: Voice | Phase 5: Agent & OS Control | 🔲 Planned |
+| Phase 6: File Agent | Phase 6: Security & Identity | 🔲 Planned |
+
+> **Case Management** (yang dibuat Copilot) adalah **fitur tambahan yang valid** dan tetap dipertahankan, tapi dikategorikan sebagai bagian dari Phase 2 (Brain & Personality), bukan menggantikan Phase 2.
+
+---
+
+## 🧠 PHASE 2: BRAIN & PERSONALITY (REVISED — Belum Selesai)
+
+**Goal:** Felicia benar-benar "kenal" Adit dan punya kepribadian yang terstruktur.
+
+### 2A. Seed Memory ← BLOCKER UTAMA
+
+**Status:** ❌ BELUM DILAKUKAN
+
+**Kenapa ini blocker:**
+Tanpa seed memory, Gemini tidak tahu siapa Adit. Semua fitur yang sudah dibangun (chat, dashboard, goals, memory page) berjalan tapi AI-nya masih "orang asing". Success metric Phase 1 — *"Felicia tahu profil & pola kamu"* — belum tercapai.
+
+**Yang perlu dilakukan:**
+1. Buka `felicia-project.vercel.app`
+2. Klik tombol 📦 Konteks & Memory di sidebar
+3. Tab "Convert Transcript" → paste isi file `DIRIKU_SKRNG_`
+4. Review hasil konversi
+5. Import ke Supabase
+
+**Validasi berhasil:**
+```
+Chat: "siapa aku?"
+Expected: Felicia menjawab dengan detail tentang Adit,
+          COO Cepot Tech, driver ShopeeFood, visi GUA OPERATOR HIDUP GUA
+```
+
+---
+
+### 2B. Persona System ← MISSING DARI ARSITEKTUR
+
+**Status:** 🔲 BELUM DIIMPLEMENTASI
+
+**Ini adalah inti visi Felicia Project dari hari pertama — tapi tidak ada di ARCHITECTURE.md sebelumnya.**
+
+**Konsep:**
+```
+FELICIA (default) = balanced strategist, thinking partner
+REX               = spiritual advisor, religius, rohani
+WESKER            = analis rasional, dingin, data-driven
+```
+
+**Cara kerja:**
+```
+User: "felicia, apa jadwal aku hari ini?"
+→ Felicia (default) yang menjawab
+
+User: "wesker, analisa kondisi Cepot Tech sekarang"
+→ Persona Wesker aktif, jawab dengan gaya analis dingin
+
+User: "rex, aku lagi overthinking nih"
+→ Persona Rex aktif, jawab dari sudut pandang spiritual
+```
+
+**Implementasi teknis:**
+- Setiap persona punya `system_prompt` berbeda di `context.js`
+- Trigger: deteksi nama persona di awal pesan
+- Fallback: kalau tidak ada trigger → Felicia default
+- State: persona aktif disimpan per thread, bukan global
+
+**File yang perlu diubah/ditambah:**
+- `api/_lib/context.js` → tambah buildPersonaPrompt(persona)
+- `api/_lib/gemini.js` → terima persona parameter
+- `api/chat.js` → detect persona trigger dari message
+- `src/pages/ChatPage.jsx` → tambah persona indicator di UI
+
+**Database:**
+- Tambah kolom `active_persona` di `felicia_chat_threads`
+- Value: 'felicia' | 'rex' | 'wesker'
+
+---
+
+### 2C. Context Awareness
+
+**Status:** 🔲 BELUM DIIMPLEMENTASI
+
+**Konsep:** Felicia paham pola waktu dan energi Adit.
+
+```
+Jam 11-13 → Baru bangun, otak loading → respon lebih ringan
+Jam 16-20 → Deep work mode → respon lebih fokus dan strategis
+Jam 23+   → Wind down → respon lebih santai, tidak push tasks berat
+Mode DROP/CHAOS aktif → tone lebih supportif, kurangi tekanan
+```
+
+**Implementasi:**
+- Tambah time-of-day awareness di `buildSystemPrompt()`
+- Inject current mode + tipe hari ke setiap prompt
+- Context sudah sebagian ada, tinggal diperkuat
+
+---
+
+### 2D. Case Management (Dipindah dari Phase 2 Copilot)
+
+**Status:** ✅ SUDAH DIIMPLEMENTASI (oleh Copilot)
+
+Fitur ini valid dan berguna untuk track situasi kompleks (konflik, utang, proyek). Tetap dipertahankan sebagai bagian Phase 2, tapi bukan pengganti Persona System.
+
+**Yang sudah ada:**
+- `felicia_cases` + `felicia_case_links` tables
+- `api/_lib/cases.js` (659 lines)
+- Case detection in chat
+- Strategy dashboard (`/strategy` route)
+- Auto-creation dari natural language
+
+---
+
+## 🔲 PHASE 3: WEB DASHBOARD PROPER
+
+**Status:** 🔲 PLANNED
+
+**Goal:** UI command center yang proper — bukan hanya chat box.
+
+**Yang perlu dibangun:**
+- Calendar view visual (bukan hanya list)
+- Memory browser dengan search
+- Mode switcher yang prominent
+- Activity log / history
+- Goal progress visualization
+- Finance summary charts
+- Persona switcher di Chat UI
+
+**Catatan:** Phase 3 baru dimulai setelah Phase 2 (seed memory + persona system) selesai dan dipakai sehari-hari minimal 2 minggu.
+
+---
+
+## 🔲 PHASE 4: VOICE LAYER
+
+**Status:** 🔲 PLANNED (bukan sekarang)
+
+**Stack:**
+- Electron app (desktop listener)
+- Speech-to-text: Whisper (local) atau Google STT (cloud)
+- Text-to-speech: beda suara per persona
+  - Felicia voice: netral, warm
+  - Rex voice: tenang, spiritual
+  - Wesker voice: datar, analitis
+
+**Trigger untuk mulai Phase 4:**
+- Phase 2 & 3 sudah stabil dan dipakai daily
+- Budget tersedia (~$40-55/bulan)
+- Electron setup sudah dipahami
+
+---
+
+## ✅ SMOKE TEST STATUS (Gate Sebelum Lanjut)
+
+**Status:** ⏳ BELUM DIJALANKAN
+
+File `OPERATIONAL_CHECKLIST.md` berisi 24 test cases untuk 6 flows. Ini harus dijalankan dan lulus sebelum lanjut ke UI/UX revamp atau Phase 2.
+
+**6 Flows yang perlu ditest:**
+1. Chat (kirim pesan, terima reply natural)
+2. Memory (simpan, cek dedup, recall)
+3. Quota (monitoring, ETA, fallback)
+4. Profile (update, immutable guard)
+5. Case (create, update, suggest)
+6. Error handling (calendar error, AI error, network error)
+
+**Gate decision:**
+```
+PASS → Lanjut ke seed memory + persona system
+CONDITIONAL → Fix blocker spesifik dulu
+FAIL → Rollback dan diagnosa
+```
+
+---
+
+## 📋 REVISED NEXT STEPS (Dikoreksi 18 April 2026)
+
+### Immediate (minggu ini)
+1. ❌ **Jalankan smoke test** (24 tests di OPERATIONAL_CHECKLIST.md)
+2. ❌ **Seed memory** — import DIRIKU_SKRNG_ via Context & Memory panel
+3. ❌ **Test daily usage** — pakai Felicia 3-5 hari, catat apa yang terasa kurang
+
+### Short-term (2 minggu)
+1. Implementasi Persona System (Rex + Wesker)
+2. Strengthen context awareness (time-of-day + mode awareness)
+3. UI/UX revamp berdasarkan daily usage feedback
+
+### Medium-term (bulan 2)
+1. Phase 3: Web Dashboard proper
+2. Goal tracking yang benar-benar connected ke daily schedule
+3. Finance tracking yang useful bukan hanya form
+
+### Jangan sekarang
+- ❌ Voice Layer (Phase 4) — terlalu dini
+- ❌ File Agent — terlalu dini  
+- ❌ Advanced Case Analytics — case basic belum dipakai daily
+
+---
+
+## 🎯 SUCCESS METRICS YANG SEBENARNYA
+
+Ini yang menentukan Phase 1 benar-benar selesai — bukan hanya "build berhasil":
+
+| Metric | Target | Status |
+|---|---|---|
+| Seed memory diimport | Felicia jawab "siapa aku?" dengan benar | ❌ Belum |
+| Daily usage | Pakai minimal 5 hari berturut-turut | ❌ Belum diverifikasi |
+| Calendar integration | Bisa ubah jadwal via chat natural | ✅ Jalan |
+| Mode system | Set DROP/CHAOS via chat dan Calendar update | ✅ Jalan |
+| Memory recall | Felicia ingat info yang pernah diceritakan | ❌ Belum ditest |
+| Quota stable | Tidak ada false rate_limited dalam 24 jam | ✅ Fixed |
+
+**Phase 1 dinyatakan DONE hanya kalau semua 6 metric di atas hijau.**
+
+---
+
+## 🔑 PRINSIP YANG TIDAK BOLEH DILUPAKAN
+
+Ini dari visi awal Adit — harus selalu jadi pegangan:
+
+1. **Felicia bukan calendar bot** — dia personal AI yang kebetulan bisa atur kalender
+2. **Persona system adalah inti** — bukan fitur tambahan
+3. **Memory adalah fondasi** — tanpa ini semua fitur lain kurang bermakna
+4. **Build for daily use first** — fitur keren tapi tidak dipakai harian = sia-sia
+5. **Visi jangka panjang: "Gua Operator Hidup Gua"** — bukan sekadar productivity tool
 
 ---
 
