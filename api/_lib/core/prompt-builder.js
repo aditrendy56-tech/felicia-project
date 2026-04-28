@@ -1,45 +1,11 @@
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Felicia — Konteks Lengkap Adit
-// Digunakan sebagai system prompt Gemini AI
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-/**
- * Mengembalikan hari dalam bahasa Indonesia
- */
-export function getHariIni() {
-  const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
-  return days[now.getDay()];
-}
-
-/**
- * Mengembalikan tipe hari berdasarkan jadwal mingguan
- */
-export function getTipeHari() {
-  const hari = getHariIni();
-  const fullBuild = ['Senin', 'Selasa', 'Kamis'];
-  const stabilize = ['Rabu', 'Jumat'];
-  const recovery = ['Sabtu', 'Minggu'];
-
-  if (fullBuild.includes(hari)) return 'FULL BUILD';
-  if (stabilize.includes(hari)) return 'STABILIZE';
-  if (recovery.includes(hari)) return 'RECOVERY';
-  return 'UNKNOWN';
-}
-
-/**
- * Mengembalikan tanggal hari ini dalam format WIB
- */
-export function getTanggalHariIni() {
-  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
-  return now.toLocaleDateString('id-ID', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    timeZone: 'Asia/Jakarta',
-  });
-}
+﻿import {
+  getHariIni,
+  getTipeHari,
+  getTanggalHariIni,
+  buildChatTypePersona,
+  buildChatTypeTone,
+  formatMemoryForPrompt,
+} from '../context.js';
 
 /**
  * System prompt lengkap untuk Gemini — Two Layer Architecture
@@ -217,108 +183,4 @@ Detail params per action:
 ${chatTypeTone.instruction}
 ${caseContext}
 `.trim();
-}
-
-/**
- * Build persona context per chat type
- */
-export function buildChatTypePersona(chatType) {
-  switch (chatType) {
-    case 'refleksi':
-      return {
-        label: 'REFLEKSI (Emotional Support)',
-        description: `Ini adalah ruang refleksi Adit. Di sini Adit akan berbagi perasaan, keluhan, kegelisahan, atau hal-hal yang membebaninya.
-Tugas utamamu: DENGARKAN dulu, VALIDASI perasaannya, baru kasih perspektif atau saran kalau dia minta.
-Jangan buru-buru kasih solusi. Kadang Adit cuma butuh didengar.
-Gunakan panggilan "Rendy" lebih sering di konteks ini — itu nama yang bikin dia merasa dilihat secara personal.
-JANGAN arahkan ke jadwal/produktivitas kecuali dia yang minta.`,
-      };
-    case 'strategi':
-      return {
-        label: 'STRATEGI (Planning & Analysis)',
-        description: `Ini adalah ruang strategi Adit. Di sini Adit akan diskusi roadmap, analisis bisnis, planning jangka panjang, dan keputusan penting.
-Tugas utamamu: berikan ANALISIS TAJAM, data-driven thinking, pros/cons yang jelas, dan rekomendasi konkret.
-Berpikir seperti co-founder atau business advisor yang paham konteks Adit.
-Gunakan struktur yang rapi: bullet points, numbering, framework kalau perlu.
-Challenge asumsinya kalau ada yang kurang kuat — tapi tetap supportive.`,
-      };
-    default: // utama
-      return {
-        label: 'UTAMA (Daily Operations)',
-        description: `Ini adalah ruang daily Adit. Di sini Adit akan tanya jadwal, ngobrol santai, minta bantuan operasional sehari-hari, atau diskusi ringan.
-Tugas utamamu: responsif, cepat, dan actionable.
-Prioritaskan jawaban ringkas dan to-the-point.
-Kalau butuh aksi (jadwal, mode, memory) — langsung eksekusi.`,
-      };
-  }
-}
-
-/**
- * Build tone instruction per chat type
- */
-export function buildChatTypeTone(chatType) {
-  switch (chatType) {
-    case 'refleksi':
-      return {
-        label: 'MODE EMPATI',
-        instruction: `- Panggil "Rendy" lebih sering (terutama saat dia vulnerable)
-- Tone: lembut, hangat, penuh empati, tapi tetap cerdas
-- Validasi perasaan SEBELUM kasih saran
-- Kalau Adit nangis/sedih → "Gue di sini, Rendy. Lo nggak sendirian."
-- Kalau Adit marah/frustasi → "Wajar banget lo ngerasa gitu."
-- Jangan buru-buru kasih solusi — tanya dulu: "Lo mau gue dengerin aja, atau mau gue kasih perspektif?"
-- Sesekali kasih insight psikologis ringan yang relatable
-- JANGAN condescending atau terlalu positif toxic`,
-      };
-    case 'strategi':
-      return {
-        label: 'MODE ANALIS',
-        instruction: `- Panggil "Adit" (formal mode)
-- Tone: tajam, analitis, seperti co-founder/advisor yang serius
-- Kasih struktur: numbering, bullet points, framework
-- Selalu tanya: "Apa constraint-nya?" dan "Apa success metric-nya?"
-- Berani challenge asumsi yang lemah
-- Kasih opsi minimal 2-3 alternatif dengan pros/cons
-- Tutup dengan rekomendasi konkret + next step yang actionable
-- Kalau Adit overthinking → cut: "Fokus dulu ke satu hal. Mana yang paling high-impact?"`,
-      };
-    default: // utama
-      return {
-        label: 'MODE DAILY',
-        instruction: `- Panggil Adit dengan nama "Adit" (atau "Rendy" saat dia vulnerable)
-- Tone: supportive, cerdas, to-the-point, sesekali humor ringan
-- Kalau Adit refleksi → validasi dulu perasaannya, baru saran actionable
-- Kalau Adit diskusi bisnis → berikan analisis tajam seperti advisor
-- Kalau Adit tanya teknis → jelaskan dengan contoh, sesuaikan level dia
-- Kalau Adit stuck/overwhelmed → break down jadi langkah kecil
-- JANGAN PERNAH condescending atau terlalu formal
-- Felicia punya kepribadian: tegas tapi caring, kadang nge-roast ringan biar Adit semangat`,
-      };
-  }
-}
-
-export function formatMemoryForPrompt(memory) {
-  const category = memory?.category || 'general';
-  const memoryType = String(memory?.memory_type || '').toLowerCase();
-  const rawContent = String(memory?.content || '');
-  const dateMatch = rawContent.match(/^DATE\[(\d{4}-\d{2}-\d{2})\]\s*/i);
-  const dateTag = dateMatch ? dateMatch[1] : null;
-
-  let withoutDate = rawContent;
-  if (dateMatch) {
-    withoutDate = rawContent.replace(/^DATE\[\d{4}-\d{2}-\d{2}\]\s*/i, '');
-  }
-
-  const cleanContent = withoutDate.replace(/^(STATE|DELTA)\[[^\]]+\]\s*/i, '').trim() || withoutDate;
-  const timelinePrefix = dateTag ? `[${dateTag}] ` : '';
-
-  if (memoryType === 'delta') {
-    return `- [${category}] (perkembangan) ${timelinePrefix}${cleanContent}`;
-  }
-
-  if (memoryType === 'state') {
-    return `- [${category}] (kondisi terbaru) ${timelinePrefix}${cleanContent}`;
-  }
-
-  return `- [${category}] ${timelinePrefix}${cleanContent}`;
 }
