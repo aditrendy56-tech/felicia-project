@@ -198,11 +198,11 @@ export async function orchestrateChat(input) {
         actionResult,
       };
 
-      if (typeof actionResult === 'string' && actionResult) {
-        reply = reply ? `${reply}\n\n${actionResult}` : actionResult;
+      if (typeof actionResult === 'string' && actionResult.trim()) {
+        reply = actionResult.trim();
       } else if (actionResult && typeof actionResult === 'object') {
         if (typeof actionResult.reply === 'string' && actionResult.reply.trim()) {
-          reply = reply ? `${reply}\n\n${actionResult.reply.trim()}` : actionResult.reply.trim();
+          reply = actionResult.reply.trim();
         }
       }
 

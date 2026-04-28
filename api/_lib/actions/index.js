@@ -122,22 +122,29 @@ export async function executeAction(actionName, params = {}, context = {}) {
 // ════════════════════════════════════════════════════════════════
 
 async function handleCreateEvent(params = {}, context = {}) {
-  const {
-    title,
-    startTime,
-    endTime,
-    description,
-  } = params;
+  const summary = String(
+    params?.summary || params?.title || params?.name || ''
+  ).trim();
+  const startRaw = params?.startTime || params?.start || params?.start_at || params?.dateTime;
+  const endRaw = params?.endTime || params?.end || params?.end_at;
+  const description = params?.description || '';
 
-  if (!title || !startTime || !endTime) {
-    throw new Error('Diperlukan: title, startTime, endTime');
+  const startTime = normalizeCalendarDateTime(startRaw);
+  let endTime = normalizeCalendarDateTime(endRaw);
+
+  if (!summary || !startTime) {
+    throw new Error('Diperlukan: summary/title dan startTime');
+  }
+
+  if (!endTime) {
+    endTime = new Date(new Date(startTime).getTime() + 60 * 60 * 1000).toISOString();
   }
 
   const result = await createEvent(
-    title,
+    summary,
     startTime,
     endTime,
-    description || ''
+    description
   );
 
   if (!result) {
@@ -152,7 +159,7 @@ async function handleCreateEvent(params = {}, context = {}) {
   });
 
   return {
-    reply: `✓ Event "${title}" berhasil dibuat!\n📅 ${startStr} — ${endStr}`,
+    reply: `✓ Event "${summary}" berhasil dibuat!\n📅 ${startStr} — ${endStr}`,
     data: {
       event: result,
       actionName: 'create_event',
@@ -161,10 +168,21 @@ async function handleCreateEvent(params = {}, context = {}) {
 }
 
 async function handleDeleteEvent(params = {}, context = {}) {
-  const { eventId } = params;
+  let { eventId } = params;
+  const summaryHint = String(params?.summary || params?.title || '').trim().toLowerCase();
+
+  if (!eventId && summaryHint) {
+    const todayEvents = await getEventsToday();
+    const matched = Array.isArray(todayEvents)
+      ? todayEvents.find((event) => String(event?.summary || '').toLowerCase().includes(summaryHint))
+      : null;
+    if (matched?.id) {
+      eventId = matched.id;
+    }
+  }
 
   if (!eventId) {
-    throw new Error('Diperlukan: eventId');
+    throw new Error('Diperlukan: eventId (atau summary yang cocok)');
   }
 
   const result = await deleteEvent(eventId);
@@ -183,11 +201,9 @@ async function handleDeleteEvent(params = {}, context = {}) {
 }
 
 async function handleRescheduleEvent(params = {}, context = {}) {
-  const {
-    eventId,
-    startTime,
-    endTime,
-  } = params;
+  const { eventId } = params;
+  const startTime = normalizeCalendarDateTime(params?.startTime || params?.start || params?.start_at);
+  const endTime = normalizeCalendarDateTime(params?.endTime || params?.end || params?.end_at);
 
   if (!eventId || !startTime || !endTime) {
     throw new Error('Diperlukan: eventId, startTime, endTime');
@@ -216,6 +232,32 @@ async function handleRescheduleEvent(params = {}, context = {}) {
       actionName: 'reschedule',
     },
   };
+}
+
+function normalizeCalendarDateTime(value) {
+  if (!value) return null;
+
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return `${raw}T09:00:00+07:00`;
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(raw)) {
+    return `${raw}:00+07:00`;
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(raw)) {
+    return `${raw}+07:00`;
+  }
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed.toISOString();
 }
 
 async function handleGetEvents(params = {}, context = {}) {
