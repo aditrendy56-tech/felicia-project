@@ -243,6 +243,8 @@ export default function ContextMemoryPanel({ isOpen, onClose }) {
               <div className="cmp-field">
                 <label className="cmp-label">Transcript</label>
                 <textarea
+                  id="cmp-transcript"
+                  name="transcript"
                   className="cmp-textarea tall"
                   placeholder="[You]: ...\n[Felicia]: ..."
                   value={transcript}
@@ -259,19 +261,19 @@ export default function ContextMemoryPanel({ isOpen, onClose }) {
               <div className="cmp-row">
                 <div className="cmp-field">
                   <label className="cmp-label">Tanggal (opsional)</label>
-                  <input className="input input-sm" type="date" value={txDate} onChange={e => setTxDate(e.target.value)} />
+                  <input id="cmp-tx-date" name="txDate" className="input input-sm" type="date" value={txDate} onChange={e => setTxDate(e.target.value)} />
                 </div>
                 <div className="cmp-field">
                   <label className="cmp-label">Mulai</label>
-                  <input className="input input-sm" type="date" value={txStart} onChange={e => setTxStart(e.target.value)} />
+                  <input id="cmp-tx-start" name="txStart" className="input input-sm" type="date" value={txStart} onChange={e => setTxStart(e.target.value)} />
                 </div>
                 <div className="cmp-field">
                   <label className="cmp-label">Akhir</label>
-                  <input className="input input-sm" type="date" value={txEnd} onChange={e => setTxEnd(e.target.value)} />
+                  <input id="cmp-tx-end" name="txEnd" className="input input-sm" type="date" value={txEnd} onChange={e => setTxEnd(e.target.value)} />
                 </div>
                 <div className="cmp-field">
                   <label className="cmp-label">Split mode</label>
-                  <select className="input input-sm" value={txSplit} onChange={e => setTxSplit(e.target.value)}>
+                  <select id="cmp-tx-split" name="txSplit" className="input input-sm" value={txSplit} onChange={e => setTxSplit(e.target.value)}>
                     <option value="auto">auto</option>
                     <option value="monthly">monthly</option>
                     <option value="none">none</option>
@@ -316,6 +318,8 @@ export default function ContextMemoryPanel({ isOpen, onClose }) {
               <div className="cmp-field">
                 <label className="cmp-label">JSON Array</label>
                 <textarea
+                  id="cmp-import-json"
+                  name="importJson"
                   className="cmp-textarea tall"
                   placeholder='[{"category":"personal","topicKey":"...","content":"..."}]'
                   value={importJson}
@@ -332,6 +336,8 @@ export default function ContextMemoryPanel({ isOpen, onClose }) {
               <div className="cmp-field" style={{ maxWidth: 220 }}>
                 <label className="cmp-label">Context date (opsional)</label>
                 <input
+                  id="cmp-import-date"
+                  name="importDate"
                   className="input input-sm"
                   type="date"
                   value={importDate}
@@ -369,6 +375,8 @@ export default function ContextMemoryPanel({ isOpen, onClose }) {
               <div className="cmp-field" style={{ maxWidth: 260 }}>
                 <label className="cmp-label">Kategori</label>
                 <select
+                  id="cmp-manual-category"
+                  name="manualCategory"
                   className="input input-sm"
                   value={manualCategory}
                   onChange={(e) => setManualCategory(e.target.value)}
@@ -386,6 +394,8 @@ export default function ContextMemoryPanel({ isOpen, onClose }) {
               <div className="cmp-field">
                 <label className="cmp-label">Judul Konteks (opsional)</label>
                 <input
+                  id="cmp-manual-title"
+                  name="manualTitle"
                   className="input input-sm"
                   type="text"
                   placeholder="Contoh: Strategi Naikin Berat Badan"
@@ -397,6 +407,8 @@ export default function ContextMemoryPanel({ isOpen, onClose }) {
               <div className="cmp-field">
                 <label className="cmp-label">Isi Memory</label>
                 <textarea
+                  id="cmp-manual-content"
+                  name="manualContent"
                   className="cmp-textarea"
                   placeholder="Contoh: Target income April final 11 juta"
                   value={manualContent}

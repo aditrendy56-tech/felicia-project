@@ -5,6 +5,7 @@
 import { google } from 'googleapis';
 
 const CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID || 'primary';
+const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 /**
  * Buat OAuth2 client dengan refresh token
@@ -29,23 +30,105 @@ function getCalendar() {
   return google.calendar({ version: 'v3', auth: getAuth() });
 }
 
+async function listAccessibleCalendars(calendar) {
+  try {
+    const res = await calendar.calendarList.list();
+    return (res.data.items || [])
+      .filter((item) => item?.id && item?.accessRole !== 'freeBusyReader')
+      .map((item) => ({
+        id: item.id,
+        summary: item.summary || item.id,
+        primary: Boolean(item.primary),
+      }));
+  } catch (err) {
+    console.error('[Calendar] calendarList.list error:', err.message);
+    return [];
+  }
+}
+
 /**
  * Helper: start dan end of day di timezone WIB
  */
-function getDayBounds(date = new Date()) {
-  const wibDate = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
-  const year = wibDate.getFullYear();
-  const month = wibDate.getMonth();
-  const day = wibDate.getDate();
+function getWibDateString(date = new Date()) {
+  const wib = new Date(date.getTime() + WIB_OFFSET_MS);
+  const year = wib.getUTCFullYear();
+  const month = String(wib.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(wib.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
-  // WIB = UTC+7
-  const startOfDay = new Date(Date.UTC(year, month, day, -7, 0, 0));
-  const endOfDay = new Date(Date.UTC(year, month, day + 1, -7, 0, 0));
+function getDayBounds(date = new Date()) {
+  const dateStr = getWibDateString(date);
+  const startOfDay = new Date(`${dateStr}T00:00:00+07:00`);
+  const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
 
   return {
     timeMin: startOfDay.toISOString(),
     timeMax: endOfDay.toISOString(),
+    dateStr,
   };
+}
+
+async function listEventsForBounds(calendar, calendarId, { timeMin, timeMax }) {
+  const res = await calendar.events.list({
+    calendarId,
+    timeMin,
+    timeMax,
+    singleEvents: true,
+    orderBy: 'startTime',
+    timeZone: 'Asia/Jakarta',
+  });
+
+  return res.data.items || [];
+}
+
+async function getEventsByBounds(bounds) {
+  const calendar = getCalendar();
+
+  try {
+    const searchCalendarIds = [];
+    const seenCalendarIds = new Set();
+
+    if (CALENDAR_ID) {
+      searchCalendarIds.push(CALENDAR_ID);
+      seenCalendarIds.add(CALENDAR_ID);
+    }
+
+    if (!seenCalendarIds.has('primary')) {
+      searchCalendarIds.push('primary');
+      seenCalendarIds.add('primary');
+    }
+
+    const calendars = await listAccessibleCalendars(calendar);
+    for (const item of calendars) {
+      if (!seenCalendarIds.has(item.id)) {
+        searchCalendarIds.push(item.id);
+        seenCalendarIds.add(item.id);
+      }
+    }
+
+    const merged = [];
+    const dedupe = new Set();
+
+    for (const calendarId of searchCalendarIds) {
+      const events = await listEventsForBounds(calendar, calendarId, bounds);
+      for (const event of events) {
+        const key = `${event.id || 'no-id'}:${event.start?.dateTime || event.start?.date || ''}:${event.summary || ''}`;
+        if (dedupe.has(key)) continue;
+        dedupe.add(key);
+        merged.push({
+          ...formatEvent(event),
+          sourceCalendarId: calendarId,
+        });
+      }
+    }
+
+    merged.sort((a, b) => String(a.startISO || '').localeCompare(String(b.startISO || '')));
+    return merged;
+  } catch (err) {
+    console.error('[Calendar] getEventsByBounds error:', err.message);
+    return [];
+  }
 }
 
 /**
@@ -81,49 +164,17 @@ function formatEvent(event) {
  * Ambil semua event hari ini
  */
 export async function getEventsToday() {
-  const calendar = getCalendar();
-  const { timeMin, timeMax } = getDayBounds();
-
-  try {
-    const res = await calendar.events.list({
-      calendarId: CALENDAR_ID,
-      timeMin,
-      timeMax,
-      singleEvents: true,
-      orderBy: 'startTime',
-      timeZone: 'Asia/Jakarta',
-    });
-
-    return (res.data.items || []).map(formatEvent);
-  } catch (err) {
-    console.error('[Calendar] getEventsToday error:', err.message);
-    return [];
-  }
+  const bounds = getDayBounds();
+  return getEventsByBounds(bounds);
 }
 
 /**
  * Ambil event pada tanggal tertentu (format: YYYY-MM-DD)
  */
 export async function getEventsDate(dateStr) {
-  const calendar = getCalendar();
   const date = new Date(dateStr + 'T00:00:00+07:00');
-  const { timeMin, timeMax } = getDayBounds(date);
-
-  try {
-    const res = await calendar.events.list({
-      calendarId: CALENDAR_ID,
-      timeMin,
-      timeMax,
-      singleEvents: true,
-      orderBy: 'startTime',
-      timeZone: 'Asia/Jakarta',
-    });
-
-    return (res.data.items || []).map(formatEvent);
-  } catch (err) {
-    console.error('[Calendar] getEventsDate error:', err.message);
-    return [];
-  }
+  const bounds = getDayBounds(date);
+  return getEventsByBounds(bounds);
 }
 
 /**

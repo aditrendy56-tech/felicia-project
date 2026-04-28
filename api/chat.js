@@ -5,6 +5,7 @@
 
 import { askGemini } from './_lib/gemini.js';
 import { setCorsHeaders, setSecurityHeaders, handleOptions } from './_lib/cors.js';
+import { requireApiAuth } from './_lib/auth.js';
 import {
   getEventsToday,
   getEventsDate,
@@ -64,11 +65,8 @@ export default async function handler(req, res) {
   }
 
   // ─── 1. Validasi API_SECRET ───
-  const authHeader = req.headers['authorization'] || '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-
-  if (!token || token !== process.env.API_SECRET) {
-    return res.status(401).json({ error: 'Unauthorized' });
+  if (!requireApiAuth(req, res)) {
+    return;
   }
 
   // ─── 2. Route berdasarkan action ───

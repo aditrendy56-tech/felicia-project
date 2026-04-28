@@ -13,6 +13,7 @@ import {
   getCaseSuggestions,
   createCaseAutoAction,
   updateCaseAction,
+  isAuthError,
 } from '../services/api';
 import './ChatPage.css';
 
@@ -35,6 +36,7 @@ export default function ChatPage() {
   const [sideOpen, setSideOpen] = useState(true);
   const [caseSuggestions, setCaseSuggestions] = useState([]);
   const [showCaseSuggestions, setShowCaseSuggestions] = useState(false);
+  const [authHint, setAuthHint] = useState('');
   // ✨ Phase 3: Case action confirmation
   const [caseActionModal, setCaseActionModal] = useState(null);
   const msgEnd = useRef(null);
@@ -46,8 +48,16 @@ export default function ChatPage() {
     setActiveThread(null);
     setMessages([]);
     listThreads(chatType)
-      .then(d => setThreads(d.threads || []))
-      .catch(() => setThreads([]))
+      .then(d => {
+        setThreads(d.threads || []);
+        setAuthHint('');
+      })
+      .catch((err) => {
+        setThreads([]);
+        if (isAuthError(err)) {
+          setAuthHint('🔐 API token belum diset / tidak valid. Thread tidak bisa dimuat.');
+        }
+      })
       .finally(() => setLoadingThreads(false));
   }, [chatType]);
 
@@ -68,8 +78,11 @@ export default function ChatPage() {
     try {
       const d = await getMessages(thread.id, 50);
       setMessages(d.messages || []);
-    } catch {
+    } catch (err) {
       setMessages([]);
+      if (isAuthError(err)) {
+        setAuthHint('🔐 API token belum valid. Riwayat chat tidak bisa dimuat.');
+      }
     }
     // On mobile, close thread sidebar
     if (window.innerWidth <= 768) setSideOpen(false);
@@ -79,6 +92,10 @@ export default function ChatPage() {
   // ✨ Phase 2: Analyze case suggestions when typing
   useEffect(() => {
     if (input.length > 10) {
+      if (authHint) {
+        setShowCaseSuggestions(false);
+        return;
+      }
       const timer = setTimeout(async () => {
         try {
           const result = await getCaseSuggestions(input);
@@ -89,7 +106,9 @@ export default function ChatPage() {
             setShowCaseSuggestions(false);
           }
         } catch (err) {
-          console.error('Error getting case suggestions:', err);
+          if (!isAuthError(err)) {
+            console.error('Error getting case suggestions:', err);
+          }
           setShowCaseSuggestions(false);
         }
       }, 500);
@@ -97,7 +116,7 @@ export default function ChatPage() {
     } else {
       setShowCaseSuggestions(false);
     }
-  }, [input]);
+  }, [input, authHint]);
 
   // ✨ Phase 3: Handle case action confirmation
   const handleCaseActionConfirm = async () => {
@@ -140,7 +159,11 @@ export default function ChatPage() {
         setThreads(prev => [d.thread, ...prev]);
         selectThread(d.thread);
       }
-    } catch {}
+    } catch (err) {
+      if (isAuthError(err)) {
+        setAuthHint('🔐 API token belum valid. Tidak bisa membuat thread baru.');
+      }
+    }
   }
 
   async function handleDeleteThread(threadId, e) {
@@ -171,7 +194,15 @@ export default function ChatPage() {
           setActiveThread(d.thread);
           threadId = d.thread.id;
         }
-      } catch {
+      } catch (err) {
+        if (isAuthError(err)) {
+          setAuthHint('🔐 API token belum valid. Kirim pesan belum bisa dilakukan.');
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: '🔐 API token belum valid. Pasang token dulu, lalu coba lagi.',
+            created_at: new Date().toISOString(),
+          }]);
+        }
         return;
       }
     }
@@ -214,12 +245,15 @@ export default function ChatPage() {
           prev.map(t => t.id === threadId ? { ...t, title: shortTitle } : t)
         );
       }
-    } catch {
+    } catch (err) {
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: '⚠️ Gagal menghubungi server.',
+        content: isAuthError(err) ? '🔐 API token belum valid. Pasang token dulu, lalu coba lagi.' : '⚠️ Gagal menghubungi server.',
         created_at: new Date().toISOString(),
       }]);
+      if (isAuthError(err)) {
+        setAuthHint('🔐 API token belum valid. Semua endpoint chat memerlukan autentikasi.');
+      }
     } finally {
       setLoading(false);
       inputRef.current?.focus();
@@ -319,6 +353,7 @@ export default function ChatPage() {
             </button>
           </div>
         </div>
+        {authHint && <div className="text-muted" style={{ margin: '6px 12px', fontSize: '0.82rem' }}>{authHint}</div>}
 
         {/* Messages */}
         <div className="chat-messages">
@@ -361,6 +396,8 @@ export default function ChatPage() {
         <div className="chat-input-area">
           <div className="chat-input-wrapper">
             <textarea
+              id="chat-message-input"
+              name="chatMessage"
               ref={inputRef}
               className="chat-input"
               rows={1}

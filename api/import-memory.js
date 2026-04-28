@@ -1,5 +1,6 @@
 import { checkDuplicateMemoryInDB, saveMemory } from './_lib/supabase.js';
 import { setCorsHeaders, setSecurityHeaders, handleOptions } from './_lib/cors.js';
+import { requireApiAuth } from './_lib/auth.js';
 
 const MAX_IMPORT_ITEMS = 120;
 
@@ -15,10 +16,8 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const authHeader = req.headers.authorization || '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-  if (!token || token !== process.env.API_SECRET) {
-    return res.status(401).json({ error: 'Unauthorized' });
+  if (!requireApiAuth(req, res)) {
+    return;
   }
 
   const body = req.body || {};

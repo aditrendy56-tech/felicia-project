@@ -1,5 +1,6 @@
 import { getCanonicalProfile, normalizeProfileInput, saveCanonicalProfile } from './_lib/profile.js';
 import { setCorsHeaders, setSecurityHeaders, handleOptions } from './_lib/cors.js';
+import { requireApiAuth } from './_lib/auth.js';
 
 export default async function handler(req, res) {
   setCorsHeaders(res, req);
@@ -9,11 +10,8 @@ export default async function handler(req, res) {
     return handleOptions(res, req);
   }
 
-  const authHeader = req.headers['authorization'] || '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-
-  if (!token || token !== process.env.API_SECRET) {
-    return res.status(401).json({ error: 'Unauthorized' });
+  if (!requireApiAuth(req, res)) {
+    return;
   }
 
   if (req.method === 'GET') {

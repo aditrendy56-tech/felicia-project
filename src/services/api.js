@@ -1,28 +1,43 @@
 /* ━━━ Felicia API Service ━━━ */
 
 const API_BASE = '/api';
+const AUTH_MISSING_MESSAGE = '🔐 API token belum diset. Login/isi token dulu agar data bisa dimuat.';
+let lastUnauthorizedToken = null;
+let sessionBootstrapPromise = null;
 
-/**
- * Build headers dengan token aman
- * Coba fetch dari session/env dulu, fallback ke API_SECRET jika ada
- */
-function buildHeaders() {
+class ApiError extends Error {
+  constructor(message, { status = 0, code = 'API_ERROR' } = {}) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
+function createAuthRequiredError(message = AUTH_MISSING_MESSAGE) {
+  return new ApiError(message, { status: 401, code: 'AUTH_REQUIRED' });
+}
+
+export function isAuthError(error) {
+  const status = Number(error?.status || 0);
+  const code = String(error?.code || '').toUpperCase();
+  return status === 401 || code === 'AUTH_REQUIRED' || code === 'UNAUTHORIZED';
+}
+
+function buildHeaders({ includeLegacyToken = false } = {}) {
   const headers = {
     'Content-Type': 'application/json',
   };
 
-  const token = getSessionToken();
-  if (token) {
+  const token = includeLegacyToken ? getLegacyToken() : null;
+  if (token && !lastUnauthorizedToken) {
     headers.Authorization = `Bearer ${token}`;
   }
 
   return headers;
 }
 
-/**
- * Ambil session token dari sessionStorage atau environment
- */
-function getSessionToken() {
+function getLegacyToken() {
   if (typeof window === 'undefined') return null;
 
   try {
@@ -31,33 +46,100 @@ function getSessionToken() {
 
     const localStored = localStorage.getItem('felicia_api_token');
     if (localStored) return localStored;
-  } catch (e) {
-    console.warn('[API] sessionStorage error:', e.message);
+  } catch {
+    return import.meta.env.VITE_API_TOKEN || null;
   }
 
   return import.meta.env.VITE_API_TOKEN || null;
 }
 
-async function post(path, body = {}) {
-  const res = await fetch(`${API_BASE}${path}`, {
+async function bootstrapSession() {
+  if (typeof window === 'undefined') return false;
+  if (sessionBootstrapPromise) return sessionBootstrapPromise;
+
+  const token = getLegacyToken();
+  if (!token || token === lastUnauthorizedToken) {
+    return false;
+  }
+
+  sessionBootstrapPromise = fetch(`${API_BASE}/auth-session`, {
     method: 'POST',
+    credentials: 'include',
+    headers: buildHeaders({ includeLegacyToken: true }),
+  })
+    .then((res) => {
+      if (res.ok) {
+        lastUnauthorizedToken = null;
+        return true;
+      }
+      if (res.status === 401) {
+        lastUnauthorizedToken = token;
+      }
+      return false;
+    })
+    .catch(() => false)
+    .finally(() => {
+      sessionBootstrapPromise = null;
+    });
+
+  return sessionBootstrapPromise;
+}
+
+async function request(path, { method = 'GET', body } = {}) {
+  await bootstrapSession();
+
+  let res = await fetch(`${API_BASE}${path}`, {
+    method,
+    credentials: 'include',
     headers: buildHeaders(),
-    body: JSON.stringify(body),
+    ...(body ? { body: JSON.stringify(body) } : {}),
   });
+
+  if (res.status === 401) {
+    const legacyToken = getLegacyToken();
+    const canTryBootstrap = Boolean(legacyToken && legacyToken !== lastUnauthorizedToken);
+    if (canTryBootstrap) {
+      const bootstrapped = await bootstrapSession();
+      if (bootstrapped) {
+        res = await fetch(`${API_BASE}${path}`, {
+          method,
+          credentials: 'include',
+          headers: buildHeaders(),
+          ...(body ? { body: JSON.stringify(body) } : {}),
+        });
+      }
+    }
+  }
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `HTTP ${res.status}`);
+    if (res.status === 401) {
+      const token = getLegacyToken();
+      if (token) {
+        lastUnauthorizedToken = token;
+      }
+      if (!token) {
+        throw createAuthRequiredError();
+      }
+      throw new ApiError(
+        err.error || '🔐 Unauthorized. API token tidak cocok dengan server.',
+        { status: 401, code: 'UNAUTHORIZED' }
+      );
+    }
+    throw new ApiError(err.error || `HTTP ${res.status}`, { status: res.status });
   }
+
+  lastUnauthorizedToken = null;
+
   return res.json();
 }
 
+async function post(path, body = {}) {
+  return request(path, { method: 'POST', body });
+}
+
 async function get(path) {
-  const res = await fetch(`${API_BASE}${path}`, { headers: buildHeaders() });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `HTTP ${res.status}`);
-  }
-  return res.json();
+  return request(path, { method: 'GET' });
 }
 
 /* ── Chat ── */
@@ -141,6 +223,10 @@ export async function getQuotaStatus() {
 
 export async function getQuotaEta() {
   return get('/quota-eta');
+}
+
+export async function getSystemStatus() {
+  return get('/system-status');
 }
 
 /* ── Profile ── */

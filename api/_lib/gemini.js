@@ -270,14 +270,14 @@ function buildQuotaWarningMessage({ retryAfterSeconds = null, likelyDailyQuota =
   const etaText = formatEta(retryAfterSeconds);
 
   if (likelyDailyQuota) {
-    return `Waduh Adit, limit harian Gemini free tier buat model ini udah kepakai penuh. ${etaText ? `Sinyal API bilang coba lagi sekitar ${etaText}. ` : ''}Kalau masih mentok, kemungkinan nunggu reset harian (biasanya sekitar 14:00–15:00 WIB). ⏳`;
+    return `Waduh Adit, limit harian Gemini free tier buat model ini udah kepakai penuh. ${etaText ? `Sinyal API bilang coba lagi sekitar ${etaText}. ` : 'Aku belum dapat ETA pasti dari API. '}Kalau masih mentok, biasanya baru bisa lagi setelah reset harian (seringnya sekitar 14:00–15:00 WIB). ⏳`;
   }
 
   if (isRateLimit) {
-    return `Waduh Adit, Gemini lagi kena rate limit sementara. ${etaText ? `Coba lagi sekitar ${etaText} ya.` : 'Coba lagi 1–3 menit lagi ya.'} ⏳`;
+    return `Waduh Adit, Gemini lagi kena rate limit sementara. ${etaText ? `Coba lagi sekitar ${etaText} ya.` : 'Aku belum dapat ETA pasti dari API, jadi perkiraan amannya coba lagi 15–30 menit lagi ya.'} ⏳`;
   }
 
-  return `Waduh Adit, limit Gemini API lagi kepakai penuh. ${etaText ? `Coba lagi sekitar ${etaText} ya.` : 'Coba lagi 1–3 menit lagi ya.'} ⏳`;
+  return `Waduh Adit, limit Gemini API lagi kepakai penuh. ${etaText ? `Coba lagi sekitar ${etaText} ya.` : 'Aku belum dapat ETA pasti dari API, jadi coba lagi nanti ya; kalau perlu sekitar 15–30 menit.'} ⏳`;
 }
 
 function formatEta(seconds) {

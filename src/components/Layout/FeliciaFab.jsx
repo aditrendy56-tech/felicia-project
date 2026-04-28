@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { sendChat } from '../../services/api';
+import { sendChat, isAuthError } from '../../services/api';
 
 export default function FeliciaFab() {
   const [open, setOpen] = useState(false);
@@ -27,8 +27,11 @@ export default function FeliciaFab() {
       const data = await sendChat({ action: 'chat', message: text, chatType: 'utama' });
       const reply = data?.reply || data?.error || 'Hmm, aku nggak bisa jawab sekarang.';
       setMessages(m => [...m, { role: 'bot', text: reply }]);
-    } catch {
-      setMessages(m => [...m, { role: 'bot', text: '⚠️ Gagal menghubungi server.' }]);
+    } catch (err) {
+      setMessages(m => [...m, {
+        role: 'bot',
+        text: isAuthError(err) ? '🔐 API token belum valid. Pasang token dulu ya.' : '⚠️ Gagal menghubungi server.',
+      }]);
     } finally {
       setLoading(false);
     }
@@ -65,6 +68,8 @@ export default function FeliciaFab() {
           </div>
           <div className="felicia-fab-input-area">
             <input
+              id="fab-quick-chat-input"
+              name="fabQuickChat"
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}

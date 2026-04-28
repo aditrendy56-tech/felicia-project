@@ -1,6 +1,6 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { getQuotaEta } from '../../services/api';
+import { getQuotaEta, isAuthError } from '../../services/api';
 
 const NAV_ITEMS = [
   { section: 'Utama' },
@@ -20,19 +20,31 @@ export default function Sidebar({ onOpenContextPanel }) {
   const [quotaState, setQuotaState] = useState('ok');
 
   useEffect(() => {
-    getQuotaEta().then(d => {
-      if (d?.state) setQuotaState(d.state);
-    }).catch(() => {});
-    const timer = setInterval(() => {
-      getQuotaEta().then(d => {
-        if (d?.state) setQuotaState(d.state);
-      }).catch(() => {});
-    }, 60_000);
-    return () => clearInterval(timer);
+    let timer = null;
+
+    const loadQuota = () => {
+      getQuotaEta()
+        .then(d => {
+          if (d?.state) setQuotaState(d.state);
+        })
+        .catch((err) => {
+          if (isAuthError(err) && timer) {
+            clearInterval(timer);
+            timer = null;
+          }
+        });
+    };
+
+    loadQuota();
+    timer = setInterval(loadQuota, 60_000);
+
+    return () => {
+      if (timer) clearInterval(timer);
+    };
   }, []);
 
   const dotClass = quotaState === 'ok' ? '' : quotaState === 'rate_limited' ? 'warning' : 'error';
-  const quotaLabel = quotaState === 'ok' ? 'Quota OK' : quotaState === 'rate_limited' ? 'Rate limited' : 'Daily limit';
+  const quotaLabel = quotaState === 'ok' ? 'Log quota normal' : quotaState === 'rate_limited' ? 'Rate limited' : 'Daily limit';
 
   return (
     <>

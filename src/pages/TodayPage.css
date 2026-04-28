@@ -1,55 +1,143 @@
 .today-page {
-  padding-bottom: 40px;
+  padding-bottom: 50px;
 }
 
 .today-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 16px;
-  padding: 20px 28px;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 18px;
+  padding: 28px 28px;
+  align-items: start;
 }
 
 .today-card {
   min-height: 120px;
 }
 
-.schedule-card { grid-column: span 1; }
+.schedule-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.schedule-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.schedule-meta {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.schedule-refresh-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.schedule-card {
+  grid-column: span 2;
+}
+
+.quick-card {
+  grid-column: span 1;
+}
 
 .sched-list {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
 }
 .sched-item {
-  font-size: 0.88rem;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.04), rgba(124, 58, 237, 0.01));
+  border: 1px solid rgba(124, 58, 237, 0.12);
+  border-left: 3px solid var(--primary);
+  border-radius: 10px;
+  transition: all 200ms ease;
+}
+.sched-item:hover {
+  transform: translateY(-1px);
+  border-color: rgba(124, 58, 237, 0.25);
+  box-shadow: 0 8px 18px rgba(124, 58, 237, 0.1);
+}
+
+.sched-time-pill {
+  min-width: 56px;
+  text-align: center;
+  font-size: 0.76rem;
+  font-weight: 800;
+  color: var(--primary-dark);
+  background: rgba(124, 58, 237, 0.14);
+  border: 1px solid rgba(124, 58, 237, 0.2);
+  border-radius: 999px;
+  padding: 6px 10px;
+  letter-spacing: 0.01em;
+}
+
+.sched-content {
+  min-width: 0;
+}
+
+.sched-title {
+  font-size: 0.9rem;
   line-height: 1.5;
   color: var(--text-secondary);
-  padding: 6px 10px;
-  background: var(--bg-input);
-  border-radius: var(--radius-sm);
-  border-left: 3px solid var(--primary);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.sched-item.is-message {
+  grid-template-columns: 1fr;
+  border-left-width: 2px;
+}
+
+.sched-item.is-message .sched-time-pill {
+  display: none;
+}
+
+.schedule-empty {
+  padding: 14px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.04), rgba(59, 130, 246, 0.02));
+  border: 1px dashed rgba(124, 58, 237, 0.25);
+}
+
+.schedule-empty-icon {
+  font-size: 1.15rem;
+  margin-bottom: 6px;
 }
 
 .quick-buttons {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
 }
 
 .ask-input-row {
   display: flex;
-  gap: 8px;
+  gap: 10px;
 }
 .ask-input-row .input { flex: 1; }
 
 .ask-reply {
-  margin-top: 12px;
-  padding: 12px;
+  margin-top: 14px;
+  padding: 14px;
   background: var(--bg-bubble-bot);
-  border-radius: var(--radius-md);
-  font-size: 0.88rem;
-  line-height: 1.55;
+  border-radius: 12px;
+  border-left: 3px solid var(--info);
+  font-size: 0.89rem;
+  line-height: 1.6;
   color: var(--text-secondary);
   white-space: pre-wrap;
 }
@@ -57,17 +145,52 @@
 .quota-info {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 .quota-warn {
-  font-size: 0.8rem;
+  font-size: 0.81rem;
   color: var(--text-muted);
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 @media (max-width: 768px) {
+  .schedule-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .schedule-header-left {
+    width: 100%;
+  }
+
+  .schedule-refresh-btn {
+    width: 100%;
+  }
+
   .today-grid {
     grid-template-columns: 1fr;
-    padding: 14px 16px;
+    padding: 16px 16px;
+    gap: 14px;
+  }
+
+  .sched-item {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .sched-time-pill {
+    justify-self: flex-start;
+  }
+
+  .schedule-card,
+  .quick-card {
+    grid-column: span 1;
+  }
+}
+
+@media (max-width: 1200px) {
+  .schedule-card,
+  .quick-card {
+    grid-column: span 1;
   }
 }
