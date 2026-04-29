@@ -1,5 +1,7 @@
 # 🏗️ FELICIA — ARSITEKTUR SISTEM LENGKAP
 
+⚠️ DO NOT update system state here. Update only in `MASTER_ARCHITECTURE.md`.
+
 > Dokumen ini bersifat legacy reference. Untuk arah paling aktual, baca `MASTER_ARCHITECTURE.md`.
 
 **Status:** Phase 1-3 Completed | Phase 4 Planning
@@ -81,11 +83,27 @@
 ### Core Principles
 
 - **Single Database:** Supabase adalah single source of truth
-- **Single Brain:** Gemini (swappable, dengan fallback chain)
+- **Single Brain:** Gemini adalah provider AI internal saat ini; abstraction/multi-provider masih rencana
 - **Deterministic Routing:** Bypass AI untuk aksi sederhana (calendar, events, memory)
 - **Context Layering:** Profile → Events → Memories → Cases → AI
 - **Modular Design:** Fitur terpisah, tapi unified dalam Felicia persona
 - **Cost Efficient:** Phase 1 = gratis, Phase 2-3 minimal cost
+
+### Current Reality Snapshot (Context Only)
+
+Bagian ini hanya untuk membantu pembaca lama memahami kondisi sistem secara cepat.
+
+**Source of truth tetap:** `MASTER_ARCHITECTURE.md` (terutama Section 3 dan Section 11)
+
+Kalau orang baru join project ini hari ini, kondisi real sistemnya adalah:
+
+- Felicia sudah berjalan dengan `orchestrator`, `intent-classifier`, `action system`, dan `step tracking`.
+- Felicia memakai **Gemini sebagai satu-satunya provider AI internal**.
+- Claude / GPT **tidak dipakai di dalam sistem**; keduanya hanya dipakai sebagai alat bantu eksternal untuk berpikir, audit, dan review.
+- Arah berikutnya **bukan** langsung menambah fitur baru, tapi menstabilkan flow yang ada: `chat → action → DB → observability`.
+- Visi multi-provider AI (`Gemini / Claude / GPT`) masih **future direction**, belum diimplementasikan.
+
+> Gunakan section ini sebagai context snapshot saja, bukan tempat update kondisi real.
 
 ---
 
