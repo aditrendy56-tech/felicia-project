@@ -1,5 +1,7 @@
 # 🏗️ FELICIA — ARSITEKTUR SISTEM LENGKAP
 
+> Dokumen ini bersifat legacy reference. Untuk arah paling aktual, baca `MASTER_ARCHITECTURE.md`.
+
 **Status:** Phase 1-3 Completed | Phase 4 Planning
 **Last Updated:** April 27, 2026
 **Tech Stack:** React (Vite) + Node.js (Vercel) + Supabase + Gemini API

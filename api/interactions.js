@@ -14,13 +14,11 @@ import { askGemini, generateWeeklyReview } from './_lib/gemini.js';
 import {
   getEventsToday,
   getEventsRange,
-  createEvent,
-  updateEvent,
-  deleteEvent,
 } from './_lib/calendar.js';
-import { activateMode, getCurrentModeStatus } from './_lib/mode.js';
+import { getCurrentModeStatus } from './_lib/mode.js';
 import { logCommand, getActiveMode, getCommandLogs } from './_lib/supabase.js';
 import { getTipeHari, getHariIni, getTanggalHariIni } from './_lib/context.js';
+import { executeActionSafely } from './_lib/actions/index.js';
 
 /**
  * Vercel Serverless Function Config
@@ -213,17 +211,21 @@ async function handleMode(userId, interaction) {
     return modeStatus.message;
   }
 
-  const result = await activateMode(modeName);
+  const result = await executeActionSafely('set_mode', { mode: modeName }, {
+    userId,
+    message: `discord:/mode ${modeName}`,
+    source: 'discord',
+  });
 
   await logCommand({
     userId,
     command: 'mode',
     input: modeName,
     action: 'set_mode',
-    response: result.message,
+    response: result?.reply || result?.message || 'mode_processed',
   });
 
-  return result.message;
+  return result?.reply || result?.message || 'Mode diproses.';
 }
 
 /**
@@ -258,8 +260,12 @@ Berikan response dalam format JSON:
   // Handle jika Gemini minta reschedule spesifik
   if (geminiResult.action === 'reschedule' && geminiResult.params?.eventId) {
     const { eventId, startTime, endTime, summary } = geminiResult.params;
-    const updated = await updateEvent(eventId, { startTime, endTime, summary });
-    if (updated) {
+    const result = await executeActionSafely('reschedule', { eventId, startTime, endTime, summary }, {
+      userId,
+      message: 'discord:/reschedule',
+      source: 'discord',
+    });
+    if (result?.reply) {
       geminiResult.reply += `\n\n✅ Event berhasil di-reschedule!`;
     }
   }
@@ -320,25 +326,41 @@ async function handleTanya(userId, interaction) {
   if (geminiResult.action === 'create_event' && geminiResult.params) {
     const { summary, startTime, endTime, description } = geminiResult.params;
     if (summary && startTime && endTime) {
-      const created = await createEvent(summary, startTime, endTime, description || '');
-      if (created) {
+      const result = await executeActionSafely('create_event', { summary, startTime, endTime, description }, {
+        userId,
+        message: pesan,
+        source: 'discord',
+      });
+      if (result?.reply) {
         geminiResult.reply += `\n\n✅ Event "${summary}" berhasil ditambahkan ke kalender!`;
       }
     }
   } else if (geminiResult.action === 'delete_event' && geminiResult.params?.eventId) {
-    const deleted = await deleteEvent(geminiResult.params.eventId);
-    if (deleted) {
+    const result = await executeActionSafely('delete_event', { eventId: geminiResult.params.eventId }, {
+      userId,
+      message: pesan,
+      source: 'discord',
+    });
+    if (result?.reply) {
       geminiResult.reply += `\n\n✅ Event berhasil dihapus dari kalender!`;
     }
   } else if (geminiResult.action === 'reschedule' && geminiResult.params?.eventId) {
     const { eventId, startTime, endTime, summary } = geminiResult.params;
-    const updated = await updateEvent(eventId, { startTime, endTime, summary });
-    if (updated) {
+    const result = await executeActionSafely('reschedule', { eventId, startTime, endTime, summary }, {
+      userId,
+      message: pesan,
+      source: 'discord',
+    });
+    if (result?.reply) {
       geminiResult.reply += `\n\n✅ Event berhasil di-reschedule!`;
     }
   } else if (geminiResult.action === 'set_mode' && geminiResult.params?.mode) {
-    const modeResult = await activateMode(geminiResult.params.mode);
-    geminiResult.reply += `\n\n${modeResult.message}`;
+    const result = await executeActionSafely('set_mode', { mode: geminiResult.params.mode }, {
+      userId,
+      message: pesan,
+      source: 'discord',
+    });
+    geminiResult.reply += `\n\n${result?.reply || 'Mode diproses.'}`;
   }
 
   await logCommand({

@@ -32,6 +32,21 @@ import {
   getModeInfo,
 } from '../mode.js';
 
+import {
+  buildBlockedActionReply,
+  validateActionExecution,
+} from '../guards/action-guard.js';
+
+import { createOrGetActionExecution, updateActionExecutionState } from '../supabase.js';
+import crypto from 'crypto';
+import { isRetryableError } from '../utils/error-classifier.js';
+import { normalizeForIdempotency } from '../utils/idempotency-normalizer.js';
+import { initSteps, recordStep, updateStep } from '../utils/step-executor.js';
+
+import {
+  shouldPersistMemory,
+} from '../guards/memory-guard.js';
+
 /**
  * Main action executor dispatcher
  * Called from orchestrator when Gemini returns action-type response
@@ -41,7 +56,7 @@ import {
  * @param {object} context - Full context: threadId, chatType, userId, message, events, memories, etc.
  * @returns {Promise<{reply, data}|string>} - Action result with optional reply
  */
-export async function executeAction(actionName, params = {}, context = {}) {
+export async function executeActionSafely(actionName, params = {}, context = {}) {
   const {
     threadId,
     chatType,
@@ -51,24 +66,97 @@ export async function executeAction(actionName, params = {}, context = {}) {
   } = context;
 
   try {
+    const actionValidation = validateActionExecution(actionName, params, context);
+    if (!actionValidation.allowed) {
+      return {
+        reply: buildBlockedActionReply(actionValidation.reason),
+        data: {
+          actionName,
+          blocked: true,
+          reason: actionValidation.reason,
+        },
+      };
+    }
+
+    // Helper: execute handler with execution-state tracking + retry for retryable errors
+    async function executeHandlerWithState(fn) {
+      // compute idempotency key from action + params + user (normalized for determinism)
+      const normalizedParams = normalizeForIdempotency(params);
+      const idempotencyInput = `${actionName}|${normalizedParams}|${context.userId || 'anon'}`;
+      const idempotencyKey = crypto.createHash('sha256').update(idempotencyInput).digest('hex').slice(0, 32);
+
+      const execRec = await createOrGetActionExecution({ userId: context.userId || null, actionName, params, source: context.chatType || 'api', threadId: context.threadId || null, idempotencyKey, idempotencyWindowMinutes: 60 });
+      const execId = execRec?.id || null;
+      let attempt = 0;
+      const maxRetries = 3;
+      let steps = initSteps();
+
+      while (true) {
+        attempt += 1;
+        if (execId) {
+          await updateActionExecutionState(execId, { status: 'running', attemptCount: attempt, startedAt: new Date().toISOString() });
+        }
+
+        try {
+          steps = recordStep(steps, { name: `attempt_${attempt}`, status: 'running', input: { actionName, params } });
+          const stepIdx = steps.length - 1;
+
+          const result = await fn();
+
+          steps = updateStep(steps, stepIdx, { status: 'success', output: result });
+
+          // attach execution id to returned payload so logging can link
+          let finalResult = result;
+          if (finalResult && typeof finalResult === 'object') {
+            if (!finalResult.data) finalResult.data = {};
+            finalResult.data.actionExecutionId = execId;
+          } else if (typeof finalResult === 'string') {
+            finalResult = { reply: finalResult, data: { actionExecutionId: execId } };
+          }
+
+          if (execId) {
+            await updateActionExecutionState(execId, { status: 'success', finishedAt: new Date().toISOString(), attemptCount: attempt, result: finalResult });
+          }
+          return finalResult;
+        } catch (err) {
+          const stepIdx = steps.length - 1;
+          steps = updateStep(steps, stepIdx, { status: 'failed', error: String(err?.message || err) });
+
+          const retryable = isRetryableError(err);
+          if (execId) {
+            await updateActionExecutionState(execId, { attemptCount: attempt, errorMessage: String(err?.message || err) });
+          }
+          if (retryable && attempt < maxRetries) {
+            const waitMs = 500 * Math.pow(2, attempt - 1);
+            await new Promise(r => setTimeout(r, waitMs));
+            continue;
+          }
+          if (execId) {
+            await updateActionExecutionState(execId, { status: 'failed', finishedAt: new Date().toISOString(), attemptCount: attempt, errorMessage: String(err?.message || err) });
+          }
+          throw err;
+        }
+      }
+    }
+
     // ─────────────────────────────────────────────
     // CALENDAR ACTIONS
     // ─────────────────────────────────────────────
 
     if (actionName === 'create_event') {
-      return await handleCreateEvent(params, context);
+      return await executeHandlerWithState(() => handleCreateEvent(params, context));
     }
 
     if (actionName === 'delete_event') {
-      return await handleDeleteEvent(params, context);
+      return await executeHandlerWithState(() => handleDeleteEvent(params, context));
     }
 
     if (actionName === 'reschedule') {
-      return await handleRescheduleEvent(params, context);
+      return await executeHandlerWithState(() => handleRescheduleEvent(params, context));
     }
 
     if (actionName === 'get_events') {
-      return await handleGetEvents(params, context);
+      return await executeHandlerWithState(() => handleGetEvents(params, context));
     }
 
     // ─────────────────────────────────────────────
@@ -76,7 +164,7 @@ export async function executeAction(actionName, params = {}, context = {}) {
     // ─────────────────────────────────────────────
 
     if (actionName === 'set_mode') {
-      return await handleSetMode(params, context);
+      return await executeHandlerWithState(() => handleSetMode(params, context));
     }
 
     // ─────────────────────────────────────────────
@@ -84,7 +172,7 @@ export async function executeAction(actionName, params = {}, context = {}) {
     // ─────────────────────────────────────────────
 
     if (actionName === 'save_memory') {
-      return await handleSaveMemory(params, context);
+      return await executeHandlerWithState(() => handleSaveMemory(params, context));
     }
 
     // ─────────────────────────────────────────────
@@ -92,11 +180,11 @@ export async function executeAction(actionName, params = {}, context = {}) {
     // ─────────────────────────────────────────────
 
     if (actionName === 'create_case_auto') {
-      return await handleCreateCaseAuto(params, context);
+      return await executeHandlerWithState(() => handleCreateCaseAuto(params, context));
     }
 
     if (actionName === 'update_case') {
-      return await handleUpdateCase(params, context);
+      return await executeHandlerWithState(() => handleUpdateCase(params, context));
     }
 
     // ─────────────────────────────────────────────
@@ -116,6 +204,8 @@ export async function executeAction(actionName, params = {}, context = {}) {
     };
   }
 }
+
+export const executeAction = executeActionSafely;
 
 // ════════════════════════════════════════════════════════════════
 // CALENDAR ACTION HANDLERS
@@ -335,12 +425,26 @@ async function handleSetMode(params = {}, context = {}) {
 // ════════════════════════════════════════════════════════════════
 
 async function handleSaveMemory(params = {}, context = {}) {
+  const persistenceDecision = shouldPersistMemory(params, context);
+  if (!persistenceDecision.allowed) {
+    return {
+      reply: `Felicia nggak simpan dulu ya. ${persistenceDecision.reason}`,
+      data: {
+        actionName: 'save_memory',
+        skipped: true,
+        reason: persistenceDecision.reason,
+      },
+    };
+  }
+
   const {
     category,
     topicKey,
     memoryType,
     content,
-  } = params;
+    score,
+    tier,
+  } = persistenceDecision.normalized;
 
   if (!category || !content) {
     throw new Error('Diperlukan: category, content');
@@ -362,6 +466,8 @@ async function handleSaveMemory(params = {}, context = {}) {
     data: {
       memory: result,
       actionName: 'save_memory',
+      memoryScore: score,
+      memoryTier: tier,
     },
   };
 }

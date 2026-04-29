@@ -308,19 +308,70 @@ export async function logCommand({ userId, command, input, action, response, sta
     const supabase = getSupabase();
     if (!supabase) return;
 
+    const responsePayload = typeof response === 'string' ? response : JSON.stringify(response);
+
     const { error } = await supabase.from('felicia_commands').insert({
       user_id: userId,
       command,
       input: input || null,
       action: action || null,
-      response: typeof response === 'string' ? response : JSON.stringify(response),
+      response: responsePayload,
       status,
       error_message: errorMessage,
     });
     if (error) console.error('[Supabase] logCommand error:', error.message);
+
+    // Observability upgrade (best-effort): write full trace to felicia_action_logs
+    const parsed = parseLogResponse(response);
+    const actionExecutionId = parsed?.actionExecutionId || (typeof response === 'object' && response?.data && response.data.actionExecutionId) || null;
+
+    const { error: actionLogError } = await supabase
+      .from('felicia_action_logs')
+      .insert({
+        user_id: userId || 'unknown',
+        source: parsed?.source || inferLogSource(command),
+        input: input || null,
+        parsed_intent: action || command || null,
+        action_executed: action || null,
+        result: parsed?.preview || responsePayload?.slice(0, 500) || null,
+        error: errorMessage || null,
+        ai_provider_used: parsed?.ai_provider || null,
+        fallback_used: Boolean(parsed?.ai_fallback_used),
+        status: status || 'success',
+        action_execution_id: actionExecutionId,
+      });
+
+    if (actionLogError && actionLogError.code !== '42P01') {
+      console.error('[Supabase] logCommand action_logs error:', actionLogError.message);
+    }
   } catch (err) {
     console.error('[Supabase] logCommand exception:', err);
   }
+}
+
+function parseLogResponse(response) {
+  if (!response) return null;
+
+  if (typeof response === 'object') {
+    return response;
+  }
+
+  const text = String(response || '').trim();
+  if (!text) return null;
+
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function inferLogSource(command = '') {
+  const value = String(command || '').toLowerCase();
+  if (value.includes('discord')) return 'discord';
+  if (value.includes('api')) return 'api';
+  return 'chat';
 }
 
 /**
@@ -765,5 +816,233 @@ export async function getCommandLogs(fromDate, toDate) {
   } catch (err) {
     console.error('[Supabase] getCommandLogs exception:', err);
     return [];
+  }
+}
+
+/**
+ * Create an action execution record (state machine entry)
+ */
+export async function createActionExecution({ userId = null, actionName = null, params = null, source = 'chat', threadId = null }) {
+  try {
+    const supabase = getSupabase();
+    if (!supabase) return null;
+
+    const payload = {
+      user_id: userId || null,
+      action_name: actionName || null,
+      params: params ? JSON.stringify(params) : null,
+      source: source || null,
+      thread_id: threadId || null,
+      status: 'pending',
+      attempt_count: 0,
+      steps: JSON.stringify([]),
+    };
+
+    const { data, error } = await supabase
+      .from('felicia_action_executions')
+      .insert(payload)
+      .select('*')
+      .single();
+
+    if (error) {
+      if (error.code === '42P01') {
+        // Table doesn't exist yet (migration not applied) — skip gracefully
+        return null;
+      }
+      console.error('[Supabase] createActionExecution error:', error.message);
+      return null;
+    }
+
+    return data || null;
+  } catch (err) {
+    console.error('[Supabase] createActionExecution exception:', err);
+    return null;
+  }
+}
+
+/**
+ * Create or return existing execution if idempotency_key provided and matching recent record
+ */
+export async function createOrGetActionExecution({ userId = null, actionName = null, params = null, source = 'chat', threadId = null, idempotencyKey = null, idempotencyWindowMinutes = 60 }) {
+  try {
+    const supabase = getSupabase();
+    if (!supabase) return null;
+
+    if (idempotencyKey) {
+      const since = new Date(Date.now() - Math.max(1, Number(idempotencyWindowMinutes)) * 60 * 1000).toISOString();
+      const { data: found, error: findErr } = await supabase
+        .from('felicia_action_executions')
+        .select('*')
+        .eq('idempotency_key', idempotencyKey)
+        .gte('created_at', since)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (!findErr && found && found.length > 0) {
+        return found[0];
+      }
+    }
+
+    const payload = {
+      user_id: userId || null,
+      action_name: actionName || null,
+      params: params ? JSON.stringify(params) : null,
+      source: source || null,
+      thread_id: threadId || null,
+      status: 'pending',
+      attempt_count: 0,
+      steps: JSON.stringify([]),
+      idempotency_key: idempotencyKey || null,
+    };
+
+    const { data, error } = await supabase
+      .from('felicia_action_executions')
+      .insert(payload)
+      .select('*')
+      .single();
+
+    if (error) {
+      if (error.code === '42P01') return null;
+      console.error('[Supabase] createOrGetActionExecution error:', error.message);
+      return null;
+    }
+
+    return data || null;
+  } catch (err) {
+    console.error('[Supabase] createOrGetActionExecution exception:', err);
+    return null;
+  }
+}
+
+/**
+ * Update action execution state
+ */
+export async function updateActionExecutionState(id, { status = null, attemptCount = null, startedAt = null, finishedAt = null, result = null, errorMessage = null } = {}) {
+  try {
+    const supabase = getSupabase();
+    if (!supabase) return false;
+
+    const payload = {};
+    if (status) payload.status = status;
+    if (Number.isFinite(attemptCount)) payload.attempt_count = attemptCount;
+    if (startedAt) payload.started_at = startedAt;
+    if (finishedAt) payload.finished_at = finishedAt;
+    if (result !== null && result !== undefined) payload.result = typeof result === 'object' ? result : JSON.stringify(result);
+    if (errorMessage) payload.error_message = errorMessage;
+
+    if (Object.keys(payload).length === 0) return false;
+
+    const { error } = await supabase
+      .from('felicia_action_executions')
+      .update(payload)
+      .eq('id', id);
+
+    if (error) {
+      if (error.code === '42P01') return false;
+      console.error('[Supabase] updateActionExecutionState error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[Supabase] updateActionExecutionState exception:', err);
+    return false;
+  }
+}
+
+/** Pending confirmations helpers **/
+export async function createPendingConfirmation({ userId = null, threadId = null, actionName = null, params = null, ttlSeconds = 300 }) {
+  try {
+    const supabase = getSupabase();
+    if (!supabase) return null;
+    const expiresAt = new Date(Date.now() + (Number(ttlSeconds) * 1000)).toISOString();
+    const { data, error } = await supabase
+      .from('felicia_pending_confirmations')
+      .insert({ user_id: userId || null, thread_id: threadId || null, action_name: actionName, params: params ? JSON.stringify(params) : null, expires_at: expiresAt })
+      .select('*')
+      .single();
+    if (error) {
+      console.error('[Supabase] createPendingConfirmation error:', error.message);
+      return null;
+    }
+    return data || null;
+  } catch (err) {
+    console.error('[Supabase] createPendingConfirmation exception:', err);
+    return null;
+  }
+}
+
+export async function getPendingConfirmationForUser({ userId = null, threadId = null }) {
+  try {
+    const supabase = getSupabase();
+    if (!supabase) return null;
+    const now = new Date().toISOString();
+    const query = supabase.from('felicia_pending_confirmations').select('*').eq('cleared', false).gte('expires_at', now).order('created_at', { ascending: false }).limit(1);
+    if (threadId) query.eq('thread_id', threadId);
+    if (userId) query.eq('user_id', userId);
+    const { data, error } = await query;
+    if (error) {
+      console.error('[Supabase] getPendingConfirmationForUser error:', error.message);
+      return null;
+    }
+    return (data && data.length > 0) ? data[0] : null;
+  } catch (err) {
+    console.error('[Supabase] getPendingConfirmationForUser exception:', err);
+    return null;
+  }
+}
+
+export async function clearPendingConfirmation(id) {
+  try {
+    const supabase = getSupabase();
+    if (!supabase) return false;
+    const { error } = await supabase.from('felicia_pending_confirmations').update({ cleared: true }).eq('id', id);
+    if (error) {
+      console.error('[Supabase] clearPendingConfirmation error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[Supabase] clearPendingConfirmation exception:', err);
+    return false;
+  }
+}
+
+/**
+ * Insert semantic step into felicia_action_steps (for future compound-action analytics)
+ */
+export async function insertActionStep(executionId, { stepName, attemptNumber = 1, status = 'pending', startedAt = null, finishedAt = null, durationMs = null, input = null, output = null, errorMessage = null }) {
+  try {
+    const supabase = getSupabase();
+    if (!supabase) return null;
+
+    const payload = {
+      action_execution_id: executionId,
+      step_name: stepName,
+      attempt_number: attemptNumber,
+      status,
+      started_at: startedAt || new Date().toISOString(),
+      finished_at: finishedAt,
+      duration_ms: durationMs,
+      input: input ? JSON.stringify(input) : null,
+      output: output ? JSON.stringify(output) : null,
+      error_message: errorMessage,
+    };
+
+    const { data, error } = await supabase
+      .from('felicia_action_steps')
+      .insert(payload)
+      .select('*')
+      .single();
+
+    if (error) {
+      if (error.code === '42P01') return null; // table doesn't exist yet
+      console.error('[Supabase] insertActionStep error:', error.message);
+      return null;
+    }
+
+    return data || null;
+  } catch (err) {
+    console.error('[Supabase] insertActionStep exception:', err);
+    return null;
   }
 }

@@ -65,6 +65,14 @@ export async function askGemini(userMessage, systemPromptOrOptions = {}, maybeOp
       type: 'chat',
       reply: 'Gemini API key belum diset di environment Vercel. Coba hubungi Adit ya. 🙏',
       rawResponse: null,
+      meta: {
+        provider: 'gemini',
+        model: null,
+        mode: null,
+        fallbackUsed: false,
+        attempt: null,
+        errorType: 'configuration',
+      },
     };
   }
 
@@ -92,7 +100,10 @@ export async function askGemini(userMessage, systemPromptOrOptions = {}, maybeOp
   let rateLimitErrorCount = 0;
   let lastErrorInfo = null;
 
-  for (const modelName of GEMINI_MODELS) {
+  for (let index = 0; index < GEMINI_MODELS.length; index += 1) {
+    const modelName = GEMINI_MODELS[index];
+    const attempt = index + 1;
+    const fallbackUsed = index > 0;
     try {
       // Primary: JSON mode — sesuai dengan system prompt yang minta JSON format
       const jsonModel = genAI.getGenerativeModel({
@@ -130,6 +141,13 @@ export async function askGemini(userMessage, systemPromptOrOptions = {}, maybeOp
       return {
         ...parsed,
         rawResponse: jsonResponse,
+        meta: {
+          provider: 'gemini',
+          model: modelName,
+          mode: 'json',
+          fallbackUsed,
+          attempt,
+        },
       };
     } catch (jsonErr) {
       console.error('[Gemini] JSON mode error from', modelName, ':', jsonErr?.message || jsonErr);
@@ -165,7 +183,18 @@ export async function askGemini(userMessage, systemPromptOrOptions = {}, maybeOp
         }
         const textResponse = safeExtractText(textResult, modelName, 'text');
         if (textResponse) {
-          return { type: 'chat', reply: textResponse.trim(), rawResponse: textResponse };
+          return {
+            type: 'chat',
+            reply: textResponse.trim(),
+            rawResponse: textResponse,
+            meta: {
+              provider: 'gemini',
+              model: modelName,
+              mode: 'text',
+              fallbackUsed,
+              attempt,
+            },
+          };
         }
         throw new Error('Empty text response from ' + modelName);
       } catch (textErr) {
@@ -197,6 +226,11 @@ export async function askGemini(userMessage, systemPromptOrOptions = {}, maybeOp
       reply: quotaWarning,
       rawResponse: null,
       meta: {
+        provider: 'gemini',
+        model: null,
+        mode: null,
+        fallbackUsed: quotaErrorCount > 0,
+        attempt: quotaErrorCount > 0 ? quotaErrorCount : null,
         errorType: 'quota',
         isRateLimit: Boolean(rateLimitErrorCount > 0 || lastErrorInfo?.isRateLimit),
         quotaErrorCount,
@@ -213,6 +247,11 @@ export async function askGemini(userMessage, systemPromptOrOptions = {}, maybeOp
     reply: 'Maaf Adit, Felicia lagi ada gangguan teknis. Tapi tenang, coba lagi sebentar lagi ya. 🙏',
     rawResponse: null,
     meta: {
+      provider: 'gemini',
+      model: null,
+      mode: null,
+      fallbackUsed: quotaErrorCount > 0,
+      attempt: GEMINI_MODELS.length,
       errorType: 'technical',
       quotaErrorCount,
       rateLimitErrorCount,

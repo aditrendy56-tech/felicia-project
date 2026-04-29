@@ -12,7 +12,7 @@ export function parseGeminiResponse(text) {
   const cleanedText = stripCodeFence(String(text || '').trim());
 
   if (!cleanedText) {
-    return { type: 'chat', reply: 'Hmm, Felicia nggak dapet response. Coba ulangi ya Adit.' };
+    return { type: 'chat', reply: 'Hmm, Felicia nggak dapet response. Coba ulangi ya Adit.', confidence: 0.2 };
   }
 
   // 1. Coba parse sebagai JSON langsung
@@ -45,6 +45,7 @@ export function parseGeminiResponse(text) {
   return {
     type: 'chat',
     reply: cleanPlainTextReply(cleanedText),
+    confidence: 0.7,
   };
 }
 
@@ -53,7 +54,7 @@ export function parseGeminiResponse(text) {
  */
 function normalizeResponse(parsed) {
   if (!parsed || typeof parsed !== 'object') {
-    return { type: 'chat', reply: String(parsed || '') };
+    return { type: 'chat', reply: String(parsed || ''), confidence: 0.3 };
   }
 
   // Deteksi format baru (type: chat/action)
@@ -66,7 +67,7 @@ function normalizeResponse(parsed) {
 
     // Validasi action — kalau invalid, treat as chat
     if (!VALID_ACTIONS.includes(action)) {
-      return { type: 'chat', reply: reply || 'Oke Adit, Felicia proses ya.' };
+      return { type: 'chat', reply: reply || 'Oke Adit, Felicia proses ya.', confidence: 0.35 };
     }
 
     const params = parsed.params && typeof parsed.params === 'object' ? parsed.params : {};
@@ -76,6 +77,7 @@ function normalizeResponse(parsed) {
       action,
       params,
       reply: reply || buildActionFallbackReply(action, params),
+      confidence: normalizeConfidence(parsed.confidence, 0.9),
     };
   }
 
@@ -83,6 +85,7 @@ function normalizeResponse(parsed) {
   return {
     type: 'chat',
     reply: reply || 'Hmm, Felicia kurang paham. Bisa jelaskan lagi Adit?',
+    confidence: normalizeConfidence(parsed.confidence, 0.8),
   };
 }
 
@@ -138,7 +141,16 @@ function parseLooseResponse(text) {
     action,
     params,
     reply,
+    confidence: 0.65,
   };
+}
+
+function normalizeConfidence(value, fallback) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  if (parsed < 0) return 0;
+  if (parsed > 1) return 1;
+  return parsed;
 }
 
 function stripCodeFence(text) {

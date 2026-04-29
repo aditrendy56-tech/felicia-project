@@ -2,38 +2,34 @@
 
 Dashboard web untuk Felicia (Personal AI Assistant) dengan frontend React + Vite dan backend API di `api/`.
 
-## Ubah Data yang Salah (Paling Cepat)
+> Mulai baca dari `MASTER_ARCHITECTURE.md` untuk arah arsitektur paling aktual.
 
-Semua data demo/statik sekarang dipusatkan di:
+## Status Cepat
 
-- `src/config/demoData.js`
+- `Chat` → live dan terhubung ke backend.
+- `Today` → live untuk jadwal, quota, dan quick ask.
+- `Memory` → live untuk profil canonical.
+- `Goals` → masih local state / placeholder.
+- `Keuangan` → masih local state / placeholder.
+- `Time` → masih placeholder UI.
 
-Yang bisa kamu edit langsung:
+Untuk penjelasan lengkap, lihat `MASTER_ARCHITECTURE.md`.
 
-- `demoProfile` → data profil di halaman `Memory`
-- `demoMemories` → daftar memory di halaman `Memory`
-- `demoGoals` → daftar goal di halaman `Goals`
-- `demoTransactions` → data transaksi di halaman `Keuangan`
-
-> Setelah edit file, jalankan ulang dev server atau refresh browser.
-
-## Data Live vs Data Demo
+## Data Live vs Data Placeholder
 
 ### Data Live (terhubung backend)
 
-- `Chat` (`/chat`) → pakai endpoint `POST /api/chat`
-- `Profil permanen` → `GET/POST /api/profile` (tersimpan ke `felicia_memories` kategori `identity`)
-- `Today` (`/today`) bagian:
-  - jadwal (query ke AI melalui `/api/chat`)
-  - quick ask
-  - quota status (`/api/quota-eta`)
+- `Chat` (`/chat`) → `POST /api/chat`
+- `Profil permanen` → `GET/POST /api/profile`
+- `Today` (`/today`) → jadwal, quick ask, quota, dan mode
+- `Memory` (`/memory`) → profil canonical dari backend
 
-### Data Demo (sementara hardcoded)
+### Data Placeholder / Local Only
 
-- `Memory` (`/memory`) bagian timeline memory demo → dari `src/config/demoData.js`
-- `Goals` (`/goals`) → dari `src/config/demoData.js`
-- `Keuangan` (`/finance`) → dari `src/config/demoData.js`
-- Beberapa kartu di `Time` dan `Settings` masih placeholder UI
+- `Goals` (`/goals`) → local state dulu
+- `Keuangan` (`/finance`) → local state dulu
+- `Time` (`/time`) → placeholder UI
+- Beberapa panel di `Settings` masih informatif / placeholder
 
 ## Identitas Permanen (Anti Ngaco)
 
@@ -60,8 +56,8 @@ Yang bisa kamu edit langsung:
 
 ### 3) Goals (`/goals`)
 
-- Klik kartu goal di kiri untuk lihat detail milestones di kanan.
-- Data saat ini demo; edit di `src/config/demoData.js` bagian `demoGoals`.
+- Tambah goal sementara masih disimpan di state halaman.
+- Detail dan persistence backend akan menyusul di roadmap.
 
 ### 4) Waktu (`/time`)
 
@@ -71,18 +67,24 @@ Yang bisa kamu edit langsung:
 ### 5) Keuangan (`/finance`)
 
 - Menampilkan saldo, pemasukan, pengeluaran, dan transaksi terakhir.
-- Data saat ini demo; edit di `src/config/demoData.js` bagian `demoTransactions`.
+- Data saat ini masih local state di halaman.
 
 ### 6) Memory (`/memory`)
 
-- Menampilkan profil dan memory timeline.
-- Data saat ini demo; edit di `src/config/demoData.js` bagian `demoProfile` dan `demoMemories`.
+- Menampilkan profil canonical.
+- Timeline memory akan dikembangkan lebih jauh di roadmap.
 
 ### 7) Settings (`/settings`)
 
 - Lihat status quota AI dan integrasi.
 - Edit profil permanen user (nama/alias/gender/domisili) lewat form khusus.
 - Sebagian panel bersifat informatif/placeholder.
+
+## Dokumen Utama
+
+- `MASTER_ARCHITECTURE.md` → pusat arsitektur dan arah kerja
+- `IMPLEMENTATION_ROADMAP.md` → urutan implementasi
+- `ARCHITECTURE.md` → detail arsitektur lama / legacy reference
 
 ## Menjalankan Project
 

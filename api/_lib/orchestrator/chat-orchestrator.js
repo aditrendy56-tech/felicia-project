@@ -8,7 +8,7 @@ import { buildSystemPrompt } from '../core/prompt-builder.js';
 import { parseGeminiResponse } from '../core/intent-classifier.js';
 import { buildInstantReply } from '../utils/instant-replies.js';
 import { tryDeterministicRoute } from '../utils/deterministic-routes.js';
-import { executeAction } from '../actions/index.js';
+import { executeActionSafely } from '../actions/index.js';
 import { getEventsToday } from '../calendar.js';
 import {
   createChatThread,
@@ -17,6 +17,9 @@ import {
   getScopedMemories,
   logCommand,
   saveChatMessage,
+  createPendingConfirmation,
+  getPendingConfirmationForUser,
+  clearPendingConfirmation,
 } from '../supabase.js';
 import { DEFAULT_PROFILE_FACTS, getCanonicalProfile } from '../profile.js';
 import {
@@ -24,6 +27,22 @@ import {
   detectCaseUpdate,
   getCases,
 } from '../cases.js';
+
+import {
+  ensureAiMeta,
+  validateAiOutput,
+  buildAiGuardReply,
+} from '../guards/ai-guard.js';
+import { askWithRetries } from '../guards/ai-guard.js';
+
+import {
+  buildClarificationReply,
+  getActionDecision,
+} from '../guards/action-guard.js';
+
+import {
+  getRelevantMemories,
+} from '../guards/memory-guard.js';
 
 const VALID_CHAT_TYPES = ['utama', 'refleksi', 'strategi'];
 
@@ -56,6 +75,41 @@ export async function orchestrateChat(input) {
   };
 
   try {
+    // Check pending confirmation first (soft-confirm flow)
+    const pending = await getPendingConfirmationForUser({ userId: actorId, threadId: activeThreadId });
+    if (pending && pending.action_name) {
+      const normalized = String(pesan || '').trim().toLowerCase();
+      const yes = ['ya', 'y', 'iya', 'yes', 'ok', 'oke', 'lanjut'];
+      const no = ['tidak', 't', 'no', 'skip', 'batalkan', 'cancel'];
+      if (yes.includes(normalized)) {
+        // execute stored action
+        await clearPendingConfirmation(pending.id);
+        const storedParams = pending.params ? JSON.parse(pending.params) : {};
+        const actionResult = await executeActionSafely(pending.action_name, storedParams, { ...baseData, threadId: activeThreadId, chatType, userId: actorId, message: pesan });
+        const reply = (actionResult && actionResult.reply) ? actionResult.reply : (typeof actionResult === 'string' ? actionResult : 'Aksi selesai.');
+        return {
+          type: 'action',
+          reply,
+          action: pending.action_name,
+          data: {
+            ...baseData,
+            executedFromPending: true,
+            pendingId: pending.id,
+            actionResult,
+          },
+        };
+      }
+      if (no.includes(normalized)) {
+        await clearPendingConfirmation(pending.id);
+        return {
+          type: 'chat',
+          reply: 'Oke, aku batalkan aksi tersebut. Kalau mau lagi, bilang aja ya.',
+          action: null,
+          data: { ...baseData, cancelledPending: true, pendingId: pending.id },
+        };
+      }
+      // otherwise continue normal processing (user didn't answer yes/no)
+    }
     const instantReply = buildInstantReply(pesan);
     if (instantReply) {
       if (activeThreadId) {
@@ -82,7 +136,7 @@ export async function orchestrateChat(input) {
       };
     }
 
-    const [events, activeMode, conversationHistory, memories, canonicalProfile] = await Promise.all([
+    const [events, activeMode, conversationHistory, allMemories, canonicalProfile] = await Promise.all([
       safeAsync(getEventsToday, []),
       safeAsync(getActiveMode, null),
       activeThreadId
@@ -91,6 +145,8 @@ export async function orchestrateChat(input) {
       safeAsync(() => getScopedMemories(chatType, 12), []),
       safeAsync(getCanonicalProfile, DEFAULT_PROFILE_FACTS),
     ]);
+
+    const memories = getRelevantMemories(allMemories, pesan, 8);
 
     const deterministicResult = await tryDeterministicRoute(pesan, { events, activeMode });
     if (deterministicResult) {
@@ -146,19 +202,71 @@ export async function orchestrateChat(input) {
     const mode = activeMode?.mode || null;
     const systemPrompt = buildSystemPrompt(mode, events, memories, profileContext, chatType, caseContext);
 
-    const geminiResult = await askGemini(pesan, systemPrompt, {
-      mode,
-      events,
-      conversationHistory,
-      memories,
-      profileContext,
-      responseMode,
-      chatType,
-      caseContext,
-    });
+    const { geminiResult, parsedResult, attempts, lastError, aiMeta } = await askWithRetries(
+      askGemini,
+      parseGeminiResponse,
+      pesan,
+      systemPrompt,
+      {
+        mode,
+        events,
+        conversationHistory,
+        memories,
+        profileContext,
+        responseMode,
+        chatType,
+        caseContext,
+        maxAttempts: 3,
+      }
+    );
 
-    const rawGeminiResponse = geminiResult?.rawResponse ?? geminiResult?.reply ?? geminiResult;
-    const parsedResult = parseGeminiResponse(rawGeminiResponse);
+    const aiValidation = validateAiOutput(parsedResult);
+
+    if (!aiValidation.ok) {
+      // AI output invalid — clear pending confirmation if new intent detected
+      if (pending) {
+        await safeAsync(() => clearPendingConfirmation(pending.id));
+      }
+
+      const guardedReply = buildAiGuardReply(aiValidation.reason);
+
+      if (activeThreadId) {
+        await safeAsync(() => saveChatMessage(activeThreadId, {
+          role: 'assistant',
+          content: guardedReply,
+          action: 'ai_guard_blocked',
+          params: { reason: aiValidation.reason },
+        }));
+      }
+
+      await safeAsync(() => logCommand({
+        userId: actorId,
+        command: 'chat',
+        input: pesan,
+        action: 'ai_guard_blocked',
+        response: buildCommandResponsePayload({
+          reply: guardedReply,
+          route: 'ai_guard',
+          aiMeta,
+          status: 'blocked',
+          reason: aiValidation.reason,
+        }),
+        status: 'error',
+        errorMessage: aiValidation.reason,
+      }));
+
+      return {
+        type: 'chat',
+        reply: guardedReply,
+        action: null,
+        data: {
+          ...baseData,
+          guard: 'ai',
+          reason: aiValidation.reason,
+          geminiMeta: aiMeta,
+        },
+      };
+    }
 
     let reply = String(parsedResult?.reply || '').trim();
     let action = parsedResult?.type === 'action' ? parsedResult.action : null;
@@ -172,13 +280,74 @@ export async function orchestrateChat(input) {
       memories,
       profileContext,
       caseContext,
-      geminiMeta: geminiResult?.meta || null,
+      geminiMeta: aiMeta,
       parsed: parsedResult,
     };
 
     if (parsedResult?.type === 'action' && action) {
       const actionParams = parsedResult.params || {};
-      const actionResult = await executeAction(action, actionParams, {
+
+      // If new action detected and pending confirmation exists for different action, clear it
+      if (pending && pending.action_name !== action) {
+        await safeAsync(() => clearPendingConfirmation(pending.id));
+      }
+
+      const actionDecision = getActionDecision(parsedResult);
+      if (actionDecision?.shouldClarify) {
+        const clarificationReply = buildClarificationReply(action, actionDecision.mode);
+        const quickConfirm = actionDecision.mode === 'soft_confirm' && Number(parsedResult.confidence) >= 0.7;
+
+        if (activeThreadId) {
+          await safeAsync(() => saveChatMessage(activeThreadId, {
+            role: 'assistant',
+            content: clarificationReply,
+            action: 'clarify_action',
+            params: {
+              targetAction: action,
+              confidence: parsedResult.confidence,
+              decisionMode: actionDecision.mode,
+              quickConfirm: quickConfirm,
+            },
+          }));
+          // create pending confirmation record so follow-up replies are unambiguous
+          try {
+            await createPendingConfirmation({ userId: actorId, threadId: activeThreadId, actionName: action, params: actionParams, ttlSeconds: 300 });
+          } catch (e) {
+            // non-fatal
+            console.warn('[Orchestrator] createPendingConfirmation failed', e?.message || e);
+          }
+        }
+
+        await safeAsync(() => logCommand({
+          userId: actorId,
+          command: 'action_clarification',
+          input: pesan,
+          action,
+          response: buildCommandResponsePayload({
+            reply: clarificationReply,
+            route: 'clarification',
+            aiMeta,
+            confidence: parsedResult.confidence,
+            status: actionDecision.mode,
+          }),
+          status: 'success',
+        }));
+
+        return {
+          type: 'chat',
+          reply: clarificationReply,
+          action: null,
+          data: {
+            ...data,
+            clarified: true,
+            confidence: parsedResult.confidence,
+            decisionMode: actionDecision.mode,
+            quickConfirm,
+          },
+        };
+      }
+
+      const actionResult = await executeActionSafely(action, actionParams, {
         ...baseData,
         threadId: activeThreadId,
         chatType,
@@ -220,7 +389,13 @@ export async function orchestrateChat(input) {
         command: 'action',
         input: pesan,
         action,
-        response: reply.substring(0, 200),
+        response: buildCommandResponsePayload({
+          reply,
+          route: 'action',
+          aiMeta,
+          confidence: parsedResult?.confidence,
+          actionResult,
+        }),
         status: 'success',
       }));
 
@@ -246,7 +421,12 @@ export async function orchestrateChat(input) {
       command: 'chat',
       input: pesan,
       action: 'chat',
-      response: reply.substring(0, 200),
+      response: buildCommandResponsePayload({
+        reply,
+        route: 'chat',
+        aiMeta,
+        confidence: parsedResult?.confidence,
+      }),
       status: geminiResult?.meta?.errorType === 'quota' ? 'quota_limited' : (geminiResult?.meta?.errorType === 'technical' ? 'error' : 'success'),
       errorMessage: geminiResult?.meta?.lastErrorMessage || null,
     }));
@@ -365,6 +545,24 @@ function inferResponseMode(message = '', chatType = 'utama') {
   }
 
   return 'balanced';
+}
+
+function buildCommandResponsePayload({ reply, route, aiMeta, confidence = null, actionResult = null, status = null, reason = null }) {
+  const textReply = String(reply || '').trim();
+
+  return {
+    preview: textReply.slice(0, 200),
+    route: route || null,
+    confidence: Number.isFinite(Number(confidence)) ? Number(confidence) : null,
+    ai_provider: aiMeta?.provider || null,
+    ai_model: aiMeta?.model || null,
+    ai_mode: aiMeta?.mode || null,
+    ai_fallback_used: Boolean(aiMeta?.fallbackUsed),
+    ai_attempt: Number.isFinite(aiMeta?.attempt) ? aiMeta.attempt : null,
+    status: status || null,
+    reason: reason || null,
+    action_result_type: actionResult ? typeof actionResult : null,
+  };
 }
 
 function buildErrorReply(err) {
