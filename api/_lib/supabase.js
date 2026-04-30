@@ -932,20 +932,65 @@ export async function updateActionExecutionState(id, { status = null, attemptCou
 
     if (Object.keys(payload).length === 0) return false;
 
-    const { error } = await supabase
+    // Protect against overwriting a record that already reached `success`.
+    // Only apply updates when the current DB status is NOT 'success'.
+    const { data, error } = await supabase
       .from('felicia_action_executions')
       .update(payload)
-      .eq('id', id);
+      .eq('id', id)
+      .neq('status', 'success')
+      .select('*');
 
     if (error) {
       if (error.code === '42P01') return false;
       console.error('[Supabase] updateActionExecutionState error:', error.message);
       return false;
     }
+    // If no rows were updated (data may be []), treat as not applied.
+    if (!data || (Array.isArray(data) && data.length === 0)) return false;
     return true;
   } catch (err) {
     console.error('[Supabase] updateActionExecutionState exception:', err);
     return false;
+  }
+}
+
+/**
+ * Atomically set execution status from 'pending' -> given status.
+ * Returns the updated record if applied, or null if the record was not in 'pending' state.
+ */
+export async function setActionExecutionStatusIfPending(id, { status = 'running', attemptCount = null, startedAt = null } = {}) {
+  try {
+    const supabase = getSupabase();
+    if (!supabase) return null;
+
+    const payload = {};
+    if (status) payload.status = status;
+    if (Number.isFinite(attemptCount)) payload.attempt_count = attemptCount;
+    if (startedAt) payload.started_at = startedAt;
+
+    if (Object.keys(payload).length === 0) return null;
+
+    const { data, error } = await supabase
+      .from('felicia_action_executions')
+      .update(payload)
+      .eq('id', id)
+      .eq('status', 'pending')
+      .select('*')
+      .single();
+
+    if (error) {
+      if (error.code === '42P01') return null;
+      // If no rows matched because status wasn't 'pending', supabase returns 406 or similar; just return null
+      // Log unexpected errors
+      if (error.code) console.error('[Supabase] setActionExecutionStatusIfPending error:', error.message);
+      return null;
+    }
+
+    return data || null;
+  } catch (err) {
+    console.error('[Supabase] setActionExecutionStatusIfPending exception:', err);
+    return null;
   }
 }
 

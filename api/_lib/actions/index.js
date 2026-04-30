@@ -37,7 +37,7 @@ import {
   validateActionExecution,
 } from '../guards/action-guard.js';
 
-import { createOrGetActionExecution, updateActionExecutionState } from '../supabase.js';
+import { createOrGetActionExecution, updateActionExecutionState, setActionExecutionStatusIfPending } from '../supabase.js';
 import crypto from 'crypto';
 import { isRetryableError } from '../utils/error-classifier.js';
 import { normalizeForIdempotency } from '../utils/idempotency-normalizer.js';
@@ -80,21 +80,93 @@ export async function executeActionSafely(actionName, params = {}, context = {})
 
     // Helper: execute handler with execution-state tracking + retry for retryable errors
     async function executeHandlerWithState(fn) {
-      // compute idempotency key from action + params + user (normalized for determinism)
+      // compute idempotency key from action + params + user (stable JSON stringify for deterministic keys)
       const normalizedParams = normalizeForIdempotency(params);
-      const idempotencyInput = `${actionName}|${normalizedParams}|${context.userId || 'anon'}`;
+      function stableStringify(obj) {
+        const replacer = (key, value) => value && typeof value === 'object' && !Array.isArray(value)
+          ? Object.keys(value).sort().reduce((acc, k) => { acc[k] = value[k]; return acc; }, {})
+          : value;
+        return JSON.stringify(obj, replacer);
+      }
+
+      const idempotencyPayload = {
+        action: actionName,
+        params: normalizedParams,
+        user: context.userId || 'anon',
+      };
+      const idempotencyInput = stableStringify(idempotencyPayload);
       const idempotencyKey = crypto.createHash('sha256').update(idempotencyInput).digest('hex').slice(0, 32);
 
-      const execRec = await createOrGetActionExecution({ userId: context.userId || null, actionName, params, source: context.chatType || 'api', threadId: context.threadId || null, idempotencyKey, idempotencyWindowMinutes: 60 });
+      // Use normalized params as the stored params payload
+      // Allow test injection via context.__mocks for createOrGetActionExecution
+      const createOrGetExecFn = context?.__mocks?.createOrGetActionExecution || createOrGetActionExecution;
+      const updateExecStateFn = context?.__mocks?.updateActionExecutionState || updateActionExecutionState;
+      const setPendingFn = context?.__mocks?.setActionExecutionStatusIfPending || setActionExecutionStatusIfPending;
+
+      const execRec = await createOrGetExecFn({ userId: context.userId || null, actionName, params: normalizedParams, source: context.chatType || 'api', threadId: context.threadId || null, idempotencyKey, idempotencyWindowMinutes: 60 });
       const execId = execRec?.id || null;
+
+      // If execution already succeeded, return stored result immediately (clone before adding flags)
+      if (execRec && String(execRec.status).toLowerCase() === 'success') {
+        // execRec.result may be a JSON string or object; clone it before modifying
+        let storedResult = execRec.result;
+        try {
+          if (typeof storedResult === 'string') storedResult = JSON.parse(storedResult);
+        } catch (e) {
+          // keep as-is
+        }
+        // Safe clone to avoid mutating DB-backed object
+        let out = null;
+        if (storedResult && typeof storedResult === 'object') {
+          try { out = JSON.parse(JSON.stringify(storedResult)); } catch (e) { out = Object.assign({}, storedResult); }
+        }
+        if (out && typeof out === 'object') {
+          if (!out.data) out.data = {};
+          out.data.__executed = false;
+          out.data.__reused = true;
+          out.data.actionExecutionId = execRec.id;
+          return out;
+        }
+        return { reply: 'Action previously completed', data: { actionExecutionId: execRec.id, __executed: false, __reused: true } };
+      }
+
+      // If execution is currently running, do not run again — return early
+      if (execRec && String(execRec.status).toLowerCase() === 'running') {
+        return {
+          reply: 'Action is currently being processed',
+          data: { actionExecutionId: execRec.id, __processing: true, __executed: false, __reused: false },
+        };
+      }
       let attempt = 0;
       const maxRetries = 3;
       let steps = initSteps();
+      // Attempt to claim the execution record by moving it from 'pending' -> 'running' atomically.
+      // If another worker already moved it to 'running' or 'success', createOrGetActionExecution above would have returned.
+      if (execId) {
+        const claimed = await setPendingFn(execId, { status: 'running', attemptCount: attempt + 1, startedAt: new Date().toISOString() });
+        if (claimed) {
+          // reflect updated attempt count if provided
+          attempt = claimed.attempt_count || attempt + 1;
+        } else {
+          // Another worker claimed or status changed; re-check the current record
+          const latest = await createOrGetExecFn({ userId: context.userId || null, actionName, params: normalizedParams, source: context.chatType || 'api', threadId: context.threadId || null, idempotencyKey, idempotencyWindowMinutes: 60 });
+          if (latest && String(latest.status).toLowerCase() === 'success') {
+            let storedResult = latest.result;
+            try { if (typeof storedResult === 'string') storedResult = JSON.parse(storedResult); } catch (e) {}
+            return storedResult || { reply: 'Action previously completed', data: { actionExecutionId: latest.id } };
+          }
+          if (latest && String(latest.status).toLowerCase() === 'running') {
+            return { reply: 'Action is currently being processed', data: { actionExecutionId: latest.id } };
+          }
+          // Otherwise, proceed without claiming (fallback to normal loop); we'll attempt to update status below before executing
+        }
+      }
 
       while (true) {
         attempt += 1;
         if (execId) {
-          await updateActionExecutionState(execId, { status: 'running', attemptCount: attempt, startedAt: new Date().toISOString() });
+          // Attempt to mark running (will not overwrite success due to DB guard)
+          await updateExecStateFn(execId, { status: 'running', attemptCount: attempt, startedAt: new Date().toISOString() });
         }
 
         try {
@@ -106,16 +178,19 @@ export async function executeActionSafely(actionName, params = {}, context = {})
           steps = updateStep(steps, stepIdx, { status: 'success', output: result });
 
           // attach execution id to returned payload so logging can link
-          let finalResult = result;
-          if (finalResult && typeof finalResult === 'object') {
-            if (!finalResult.data) finalResult.data = {};
-            finalResult.data.actionExecutionId = execId;
-          } else if (typeof finalResult === 'string') {
-            finalResult = { reply: finalResult, data: { actionExecutionId: execId } };
-          }
+            let finalResult = result;
+            if (finalResult && typeof finalResult === 'object') {
+              if (!finalResult.data) finalResult.data = {};
+              // mark that this run actually executed the handler
+              finalResult.data.__executed = true;
+              finalResult.data.__reused = false;
+              finalResult.data.actionExecutionId = execId;
+            } else if (typeof finalResult === 'string') {
+              finalResult = { reply: finalResult, data: { actionExecutionId: execId, __executed: true, __reused: false } };
+            }
 
           if (execId) {
-            await updateActionExecutionState(execId, { status: 'success', finishedAt: new Date().toISOString(), attemptCount: attempt, result: finalResult });
+            await updateExecStateFn(execId, { status: 'success', finishedAt: new Date().toISOString(), attemptCount: attempt, result: finalResult });
           }
           return finalResult;
         } catch (err) {
@@ -124,7 +199,7 @@ export async function executeActionSafely(actionName, params = {}, context = {})
 
           const retryable = isRetryableError(err);
           if (execId) {
-            await updateActionExecutionState(execId, { attemptCount: attempt, errorMessage: String(err?.message || err) });
+            await updateExecStateFn(execId, { attemptCount: attempt, errorMessage: String(err?.message || err) });
           }
           if (retryable && attempt < maxRetries) {
             const waitMs = 500 * Math.pow(2, attempt - 1);
@@ -132,7 +207,7 @@ export async function executeActionSafely(actionName, params = {}, context = {})
             continue;
           }
           if (execId) {
-            await updateActionExecutionState(execId, { status: 'failed', finishedAt: new Date().toISOString(), attemptCount: attempt, errorMessage: String(err?.message || err) });
+            await updateExecStateFn(execId, { status: 'failed', finishedAt: new Date().toISOString(), attemptCount: attempt, errorMessage: String(err?.message || err) });
           }
           throw err;
         }
@@ -215,41 +290,22 @@ async function handleCreateEvent(params = {}, context = {}) {
   const summary = String(
     params?.summary || params?.title || params?.name || ''
   ).trim();
-  const startRaw = params?.startTime || params?.start || params?.start_at || params?.dateTime;
-  const endRaw = params?.endTime || params?.end || params?.end_at;
-  const description = params?.description || '';
 
-  const startTime = normalizeCalendarDateTime(startRaw);
-  let endTime = normalizeCalendarDateTime(endRaw);
-
-  if (!summary || !startTime) {
-    throw new Error('Diperlukan: summary/title dan startTime');
+  if (!summary) {
+    throw new Error('Diperlukan: summary/title');
   }
 
-  if (!endTime) {
-    endTime = new Date(new Date(startTime).getTime() + 60 * 60 * 1000).toISOString();
-  }
+  // MOCK MODE: Google Calendar disabled
+  const randomDelay = 100 + Math.floor(Math.random() * 201);
+  await new Promise((resolve) => setTimeout(resolve, randomDelay));
 
-  const result = await createEvent(
+  const result = {
+    id: `mock_${Math.random().toString(36).slice(2, 10)}`,
     summary,
-    startTime,
-    endTime,
-    description
-  );
-
-  if (!result) {
-    throw new Error('Gagal membuat event di Google Calendar');
-  }
-
-  const startStr = new Date(startTime).toLocaleString('id-ID', {
-    timeZone: 'Asia/Jakarta',
-  });
-  const endStr = new Date(endTime).toLocaleString('id-ID', {
-    timeZone: 'Asia/Jakarta',
-  });
+  };
 
   return {
-    reply: `✓ Event "${summary}" berhasil dibuat!\n📅 ${startStr} — ${endStr}`,
+    reply: `✓ (MOCK) Event "${summary}" berhasil dibuat!`,
     data: {
       event: result,
       actionName: 'create_event',
