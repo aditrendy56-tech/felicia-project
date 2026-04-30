@@ -21,6 +21,8 @@ Core principles:
 - **Deterministic first:** simple actions should bypass AI when possible.
 - **Memory-first:** personal context must persist across chats and UI changes.
 - **Modular growth:** new tools can be separated if they become too heavy, but they still connect back to Felicia.
+- **AI as assistant, not engine:** AI only handles conversation, memory retrieval, question answering, and intent parsing. Business logic (finance, scheduling, goal tracking) runs deterministically offline. Result: lower token cost, better reliability, scalability.
+- **Offline-first local execution:** Features should work offline on laptop when possible (file access, local computation, scheduling). Online capability (search, external API calls) is optional and explicit. No feature requires constant cloud connection.
 
 ## 3) Current State
 
@@ -416,6 +418,16 @@ Phase 1 guardrails:
 - No direct shell commands from the frontend.
 - No destructive system actions until the local bridge, logging, and confirmation flow are proven stable.
 - Every approved action must be auditable with who asked, what ran, and what result returned.
+
+### Offline-First Deterministic Features (See OFFLINE_FIRST_GOVERNANCE.md)
+
+Features that handle business logic (finance, scheduling, goal tracking, time management) should be **deterministic-first and offline-capable**, not AI-driven.
+
+**Core principle:** AI is a helper (answering questions, parsing intent, retrieving memory), not the engine (business logic, decisions, calculations).
+
+**Result:** 95-99% token savings, faster execution, works offline, more reliable.
+
+For detailed implementation rules, checklist, and examples, see `OFFLINE_FIRST_GOVERNANCE.md` in the project root.
 
 ## 5) What This Architecture Optimizes For
 
