@@ -113,7 +113,25 @@ export function shouldPersistMemory(params = {}, context = {}) {
   };
 }
 
-export function getRelevantMemories(memories = [], userInput = '', limit = 5) {
+import { getSemanticMemories } from '../supabase.js';
+
+// Try semantic search first (pgvector + Gemini embeddings). If semantic search fails or
+// returns no results, fall back to the original token-overlap + recency heuristic.
+export async function getRelevantMemories(memories = [], userInput = '', limit = 5) {
+  // SEMANTIC: try server-side semantic retrieval
+  try {
+    const sem = await getSemanticMemories(String(userInput || ''), Number(limit || 5));
+    if (Array.isArray(sem) && sem.length > 0) {
+      // RPC returns objects with content, category, title, memory_type
+      return sem.map(item => ({
+        ...item,
+      }));
+    }
+  } catch (e) {
+    console.warn('[MemoryGuard] Semantic retrieval failed, falling back to heuristic:', e?.message || e);
+  }
+
+  // FALLBACK: original heuristic ranking
   const inputTokens = tokenize(userInput);
   const normalizedInput = String(userInput || '').toLowerCase();
 

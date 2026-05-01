@@ -146,7 +146,7 @@ export async function orchestrateChat(input) {
       safeAsync(getCanonicalProfile, DEFAULT_PROFILE_FACTS),
     ]);
 
-    const memories = getRelevantMemories(allMemories, pesan, 8);
+    const memories = await getRelevantMemories(allMemories, pesan, 8);
 
     const deterministicResult = await tryDeterministicRoute(pesan, { events, activeMode });
     if (deterministicResult) {

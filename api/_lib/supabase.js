@@ -2,7 +2,16 @@
 // Felicia — Supabase Client + Logging
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
+import { generateEmbedding } from './utils/embeddings.js';
+
+// Load .env.local if running in Node (for scripts like backfill)
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
+const envPath = path.resolve(currentDir, '../../.env.local');
+dotenv.config({ path: envPath, override: true });
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -668,7 +677,24 @@ export async function saveMemory({
 
     if (!error) {
       console.log('[Supabase] saveMemory success, id:', insertedData?.[0]?.id, 'token:', token);
-      return insertedData?.[0];
+      const record = insertedData?.[0];
+
+      // SEMANTIC: attempt to generate embedding and persist it (best-effort)
+      try {
+        const textForEmbedding = String(content || '').slice(0, 15000);
+        const emb = await generateEmbedding(textForEmbedding);
+        if (emb && Array.isArray(emb) && emb.length > 0) {
+          // Best-effort update; ignore errors
+          await supabase
+            .from('felicia_memories')
+            .update({ embedding: emb })
+            .eq('id', record.id);
+        }
+      } catch (e) {
+        console.warn('[Supabase] saveMemory: embedding generation/update failed:', e?.message || e);
+      }
+
+      return record;
     }
 
     // Handle UNIQUE constraint violation (duplicate) — return existing record instead
@@ -1089,5 +1115,50 @@ export async function insertActionStep(executionId, { stepName, attemptNumber = 
   } catch (err) {
     console.error('[Supabase] insertActionStep exception:', err);
     return null;
+  }
+}
+
+/**
+ * SEMANTIC: Retrieve memories using vector similarity (pgvector + match_memories RPC)
+ * Falls back to `getRecentMemories` when embedding generation fails or RPC returns empty
+ */
+export async function getSemanticMemories(userInput = '', limit = 10, matchThreshold = 0.60) {
+  try {
+    const supabase = getSupabase();
+    if (!supabase) return [];
+
+    // Try to generate embedding for the query (best-effort)
+    let queryEmb = null;
+    try {
+      const emb = await generateEmbedding(String(userInput || ''));
+      if (emb && Array.isArray(emb) && emb.length > 0) queryEmb = emb;
+    } catch (e) {
+      console.warn('[Supabase] getSemanticMemories: embedding generation failed:', e?.message || e);
+    }
+
+    if (!queryEmb) {
+      return await getRecentMemories(limit);
+    }
+
+    // Call RPC match_memories — returns ordered nearest neighbors
+    const { data, error } = await supabase.rpc('match_memories', {
+      query_embedding: queryEmb,
+      match_threshold: Number(matchThreshold || 0.60),
+      match_count: Number(limit || 10),
+    });
+
+    if (error) {
+      console.warn('[Supabase] getSemanticMemories rpc error:', error.message);
+      return await getRecentMemories(limit);
+    }
+
+    if (!data || (Array.isArray(data) && data.length === 0)) {
+      return await getRecentMemories(limit);
+    }
+
+    return data || [];
+  } catch (err) {
+    console.error('[Supabase] getSemanticMemories exception:', err);
+    return await getRecentMemories(limit);
   }
 }
