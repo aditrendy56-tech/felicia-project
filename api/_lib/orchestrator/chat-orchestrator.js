@@ -44,6 +44,10 @@ import {
   getRelevantMemories,
 } from '../guards/memory-guard.js';
 
+import {
+  getMemoriesWithEntityFallback,
+} from '../guards/entity-memory-guard.js';
+
 const VALID_CHAT_TYPES = ['utama', 'refleksi', 'strategi'];
 
 export async function orchestrateChat(input) {
@@ -136,17 +140,21 @@ export async function orchestrateChat(input) {
       };
     }
 
-    const [events, activeMode, conversationHistory, allMemories, canonicalProfile] = await Promise.all([
+    const [events, activeMode, conversationHistory, canonicalProfile] = await Promise.all([
       safeAsync(getEventsToday, []),
       safeAsync(getActiveMode, null),
       activeThreadId
         ? safeAsync(() => getChatMessages(activeThreadId, 10), [])
         : Promise.resolve([]),
-      safeAsync(() => getScopedMemories(chatType, 12), []),
       safeAsync(getCanonicalProfile, DEFAULT_PROFILE_FACTS),
     ]);
 
-    const memories = await getRelevantMemories(allMemories, pesan, 8);
+    // NEW: Entity-aware memory retrieval (replaces scoped-only approach)
+    // Combines scoped memories + entity-based fallback for consistency across threads
+    const memories = await safeAsync(
+      () => getMemoriesWithEntityFallback(pesan, chatType, 12, 8),
+      []
+    );
 
     const deterministicResult = await tryDeterministicRoute(pesan, { events, activeMode });
     if (deterministicResult) {
