@@ -11,7 +11,7 @@ Dashboard web untuk Felicia (Personal AI Assistant) dengan frontend React + Vite
 - `Memory` → live untuk profil canonical.
 - `Goals` → masih local state / placeholder.
 - `Keuangan` → masih local state / placeholder.
-- `Time` → masih placeholder UI.
+- `Time` → masih placeholder UI..
 
 Untuk penjelasan lengkap, lihat `MASTER_ARCHITECTURE.md`.
 
