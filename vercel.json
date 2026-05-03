@@ -3,6 +3,23 @@
   "buildCommand": "npx vite build",
   "outputDirectory": "dist",
   "rewrites": [
+    { "source": "/api/quota-debug", "destination": "/api/quota?op=debug" },
+    { "source": "/api/quota-eta", "destination": "/api/quota?op=eta" },
+    { "source": "/api/quota-status", "destination": "/api/quota?op=status" },
+
+    { "source": "/api/calendar-debug", "destination": "/api/debug?op=calendar" },
+    { "source": "/api/debug-embedding-status", "destination": "/api/debug?op=embedding-status" },
+    { "source": "/api/debug-semantic-memory", "destination": "/api/debug?op=semantic-memory" },
+    { "source": "/api/test-semantic", "destination": "/api/debug?op=test-semantic" },
+    { "source": "/api/verify-call-chain", "destination": "/api/debug?op=verify-call-chain" },
+    { "source": "/api/CALL_CHAIN_SUMMARY", "destination": "/api/debug?op=call-chain-summary" },
+    { "source": "/api/PGVECTOR_STATUS", "destination": "/api/debug?op=pgvector-status" },
+
+    { "source": "/api/check-db", "destination": "/api/admin?op=check-db" },
+    { "source": "/api/system-status", "destination": "/api/admin?op=system-status" },
+    { "source": "/api/import-memory", "destination": "/api/admin?op=import-memory" },
+    { "source": "/api/convert-transcript", "destination": "/api/admin?op=convert-transcript" },
+
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],

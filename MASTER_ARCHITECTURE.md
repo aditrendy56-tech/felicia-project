@@ -30,11 +30,9 @@ Core principles:
 
 **Purpose:** Track what changed, why it matters, and what's next in simple language.
 
-#### Changes Made (4 main areas)
 
 **1. Provider Flexibility Strategy (May 1)**
 - **What:** Documented how Felicia can eventually support Claude, OpenAI, or other AI providers — not just Gemini
-- **Why:** Current project might later want to switch or use multiple AI models. Need a plan so we don't hardcode Gemini everywhere
 - **Impact:** Future-proofing; no code changed yet; purely architectural documentation
 - **Status:** ✅ Documented, ready to implement when needed
 
@@ -42,36 +40,27 @@ Core principles:
 - **What:** Designed how Felicia should control your laptop — open apps, folders, camera, etc. via chat or voice
 - **Why:** User asked if Felicia can do things like "open camera" or "open Videos folder" locally, like Jarvis
 - **Phase 1 scope:** Only safe stuff first (open folder, launch trusted app, camera preview). No shell commands, no file deletion yet
-- **Impact:** Enables laptop automation while staying safe. Backend work + local agent needed before implementation
 - **Status:** ✅ Architecture designed, ready for code next
 
 **3. Supabase Migration & Schema (April 30)**
 - **What:** Applied 6 database migrations to Supabase to add:
   - `felicia_action_executions` — tracks every action (pending → running → success/failed)
-  - `felicia_pending_confirmations` — for soft-confirm UX
   - `felicia_action_steps` — tracks steps within actions
   - Enhanced `felicia_action_logs` with links to execution records
   - RLS policies + security indexes
 - **Impact:** ✅ Database now ready for execution tracking. Code already wired to use these tables
 - **Status:** ✅ All 6 migrations applied successfully
-
 **4. Architecture Documentation Updates (April 30 – May 1)**
 - **What:** Updated `MASTER_ARCHITECTURE.md` with:
   - Provider abstraction section (Layer 1)
   - Local device control section with 1-10 safety scale (Layer 4)
-  - Phase 1 guardrails + module design for laptop control
   - Updated gaps/priorities
 - **Impact:** Single source of truth now caught up. Next code changes have clear target
-- **Status:** ✅ Docs aligned with vision
 
 #### What's Now Working ✅
 
 | Feature | Status | How |
 |---------|--------|-----|
-| Chat flow | ✅ | Users chat; Gemini responds & executes actions |
-| Action tracking | ✅ | Every action stored in DB with state (pending/running/success) |
-| Soft confirmation | ✅ | Low-confidence actions ask user first before running |
-| Retry + backoff | ✅ | Failed actions retry 3x with exponential delay |
 | Full audit trail | ✅ | Every action logged with execution ID for tracing |
 | Memory system | ✅ | Profile + memories loaded into prompts |
 | Calendar sync | ✅ | Google Calendar events available in chat |
@@ -83,24 +72,20 @@ Core principles:
 |-----|----------|---------------|-----------|
 | Deploy to production | HIGH | Nothing live yet; local only | 1–2 weeks |
 | Local device control | MEDIUM | Phase 2; laptop automation | 2–3 weeks |
-| Goals/Finance backend | MEDIUM | UI ready but no data save | 1–2 weeks each |
 | Multi-AI provider setup | LOW | Future-proofing; Gemini works fine | 3–4 weeks |
 | Memory timeline UX | LOW | Basic memory works; polish UI | 2–3 weeks |
 
 #### Next Steps (Ready to Execute)
 
-**No blockers — code is clean and ready.** Pick one:
 
 1. **Test end-to-end locally** (1 day)
    - Trigger chat action → see tracked in DB → verify soft-confirm
    - Smoke test all pages
 
-2. **Deploy to production** (3–5 days)
    - Copy env to Vercel + finalize settings
    - Run Supabase RLS checks
    - Live smoke tests
 
-3. **Start Phase 2: Local Device Control** (parallel)
    - Build `api/_lib/device/*` modules (policy, bridge)
    - Build local agent for laptop
    - Start with "open folder" action (safest first)
