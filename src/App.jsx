@@ -9,6 +9,7 @@ import FinancePage from './pages/FinancePage';
 import MemoryPage from './pages/MemoryPage';
 import StrategyPage from './pages/StrategyPage';
 import SettingsPage from './pages/SettingsPage';
+import VoicePage from './pages/VoicePage';
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
         <Route path="/memory" element={<MemoryPage />} />
         <Route path="/strategy" element={<StrategyPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/voice" element={<VoicePage />} />
       </Route>
     </Routes>
   );

@@ -144,8 +144,8 @@ async function get(path) {
 
 /* ── Chat ── */
 
-export async function sendChat({ message, chatType = 'utama', threadId = null }) {
-  return post('/chat', { action: 'chat', message, chatType, threadId });
+export async function sendChat({ message, chatType = 'utama', threadId = null, runMode = 'system' }) {
+  return post('/chat', { action: 'chat', message, chatType, threadId, runMode });
 }
 
 export async function listThreads(chatType = null, limit = 30) {

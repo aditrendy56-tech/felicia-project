@@ -23,6 +23,12 @@ const CHAT_TYPES = [
   { key: 'strategi',  label: '🧠 Strategi',  color: 'var(--strategi)' },
 ];
 
+const RUN_MODES = [
+  { key: 'system', label: 'System' },
+  { key: 'hybrid', label: 'Hybrid' },
+  { key: 'ai', label: 'AI' },
+];
+
 export default function ChatPage() {
   const { openContextPanel } = useOutletContext() || {};
   const [chatType, setChatType] = useState('utama');
@@ -37,10 +43,15 @@ export default function ChatPage() {
   const [caseSuggestions, setCaseSuggestions] = useState([]);
   const [showCaseSuggestions, setShowCaseSuggestions] = useState(false);
   const [authHint, setAuthHint] = useState('');
+  const [runMode, setRunMode] = useState('system');
+  const [assistantState, setAssistantState] = useState('idle');
+  const [micSupported, setMicSupported] = useState(false);
+  const [micListening, setMicListening] = useState(false);
   // ✨ Phase 3: Case action confirmation
   const [caseActionModal, setCaseActionModal] = useState(null);
   const msgEnd = useRef(null);
   const inputRef = useRef(null);
+  const recognitionRef = useRef(null);
 
   // Load threads when chatType changes
   useEffect(() => {
@@ -64,6 +75,56 @@ export default function ChatPage() {
   // Load quota
   useEffect(() => {
     getQuotaEta().then(setQuota).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setMicSupported(false);
+      return;
+    }
+
+    setMicSupported(true);
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'id-ID';
+    recognition.interimResults = true;
+    recognition.continuous = false;
+
+    recognition.onstart = () => {
+      setMicListening(true);
+      setAssistantState('listening');
+    };
+
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .map((result) => result[0]?.transcript || '')
+        .join(' ')
+        .trim();
+      if (transcript) {
+        setInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
+      }
+    };
+
+    recognition.onend = () => {
+      setMicListening(false);
+      setAssistantState('idle');
+    };
+
+    recognition.onerror = () => {
+      setMicListening(false);
+      setAssistantState('idle');
+    };
+
+    recognitionRef.current = recognition;
+
+    return () => {
+      try {
+        recognition.stop();
+      } catch {}
+      recognitionRef.current = null;
+    };
   }, []);
 
   // Scroll to bottom on new messages
@@ -211,12 +272,15 @@ export default function ChatPage() {
     const userMsg = { role: 'user', content: text, created_at: new Date().toISOString() };
     setMessages(prev => [...prev, userMsg]);
     setLoading(true);
+    setAssistantState('thinking');
 
     try {
-      const d = await sendChat({ message: text, chatType, threadId });
+      const d = await sendChat({ message: text, chatType, threadId, runMode });
       const reply = d?.reply || d?.error || 'Hmm, aku nggak bisa jawab sekarang.';
       const botMsg = { role: 'assistant', content: reply, created_at: new Date().toISOString() };
       setMessages(prev => [...prev, botMsg]);
+      setAssistantState('speaking');
+      setTimeout(() => setAssistantState('idle'), 1000);
 
       // ✨ Phase 3: Handle case actions
       if (d?.action === 'create_case_auto' && d?.type === 'action') {
@@ -251,6 +315,7 @@ export default function ChatPage() {
         content: isAuthError(err) ? '🔐 API token belum valid. Pasang token dulu, lalu coba lagi.' : '⚠️ Gagal menghubungi server.',
         created_at: new Date().toISOString(),
       }]);
+      setAssistantState('idle');
       if (isAuthError(err)) {
         setAuthHint('🔐 API token belum valid. Semua endpoint chat memerlukan autentikasi.');
       }
@@ -259,6 +324,23 @@ export default function ChatPage() {
       inputRef.current?.focus();
     }
   }
+
+  function toggleMic() {
+    if (!micSupported || !recognitionRef.current) return;
+    if (micListening) {
+      recognitionRef.current.stop();
+      return;
+    }
+    try {
+      recognitionRef.current.start();
+    } catch {}
+  }
+
+  const assistantLabel =
+    assistantState === 'listening' ? 'Listening' :
+    assistantState === 'thinking' ? 'Thinking' :
+    assistantState === 'speaking' ? 'Responding' :
+    'Ready';
 
   function handleKeyDown(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -348,6 +430,22 @@ export default function ChatPage() {
             </span>
           </div>
           <div className="chat-main-header-right">
+            <div className="jarvis-header-control">
+              <div className={`jarvis-orb ${assistantState}`} />
+              <span className="jarvis-label">{assistantLabel}</span>
+            </div>
+            <div className="run-mode-toggle" role="tablist" aria-label="Run mode">
+              {RUN_MODES.map((mode) => (
+                <button
+                  key={mode.key}
+                  className={`run-mode-btn ${runMode === mode.key ? 'active' : ''}`}
+                  onClick={() => setRunMode(mode.key)}
+                  type="button"
+                >
+                  {mode.label}
+                </button>
+              ))}
+            </div>
             <button className="btn btn-ghost btn-sm" onClick={() => openContextPanel?.()} title="Konteks & Memory">
               📦 Konteks
             </button>
@@ -394,6 +492,20 @@ export default function ChatPage() {
 
         {/* Input */}
         <div className="chat-input-area">
+          <div className="chat-input-toolbar">
+            <button
+              type="button"
+              className={`chat-mic-btn ${micListening ? 'live' : ''}`}
+              onClick={toggleMic}
+              disabled={!micSupported}
+              title={micSupported ? 'Push-to-talk' : 'Microphone not supported in this browser'}
+            >
+              {micListening ? '🔴 Mic On' : '🎤 Mic'}
+            </button>
+            <span className="chat-mode-hint">
+              Mode aktif: <strong>{RUN_MODES.find((m) => m.key === runMode)?.label}</strong>
+            </span>
+          </div>
           <div className="chat-input-wrapper">
             <textarea
               id="chat-message-input"
@@ -451,7 +563,7 @@ export default function ChatPage() {
             </div>
           )}
 
-          <div className="chat-input-hint">Enter kirim · Shift+Enter baris baru</div>
+          <div className="chat-input-hint">Enter kirim · Shift+Enter baris baru · 🎤 push-to-talk</div>
         </div>
 
         {/* ✨ Phase 3: Case Action Confirmation Modal */}

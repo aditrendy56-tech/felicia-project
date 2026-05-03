@@ -6,6 +6,7 @@ const NAV_ITEMS = [
   { section: 'Utama' },
   { path: '/today',    icon: '☀️', label: 'Hari Ini' },
   { path: '/chat',     icon: '💬', label: 'Chat' },
+  { path: '/voice',    icon: '🛰️', label: 'Voice' },
   { section: 'Kelola' },
   { path: '/goals',    icon: '🎯', label: 'Goals' },
   { path: '/time',     icon: '⏰', label: 'Waktu' },
