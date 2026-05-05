@@ -4,11 +4,11 @@
 // Dijalankan setiap pagi 08:00 WIB (01:00 UTC)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-import { sendDM } from './_lib/discord.js';
-import { getEventsToday } from './_lib/calendar.js';
-import { generateMorningSummary } from './_lib/gemini.js';
-import { getActiveMode, logCommand } from './_lib/supabase.js';
-import { getTanggalHariIni, getTipeHari } from './_lib/context.js';
+import { sendDM } from '../lib/discord.js';
+import { getEventsToday } from '../lib/calendar.js';
+import { generateMorningSummary } from '../lib/gemini.js';
+import { getActiveMode, logCommand } from '../lib/supabase.js';
+import { getTanggalHariIni, getTipeHari } from '../lib/context.js';
 
 export default async function handler(req, res) {
   // Hanya terima GET

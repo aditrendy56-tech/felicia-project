@@ -1,6 +1,6 @@
-import { getCanonicalProfile, normalizeProfileInput, saveCanonicalProfile } from './_lib/profile.js';
-import { setCorsHeaders, setSecurityHeaders, handleOptions } from './_lib/cors.js';
-import { requireApiAuth } from './_lib/auth.js';
+import { getCanonicalProfile, normalizeProfileInput, saveCanonicalProfile } from '../lib/profile.js';
+import { setCorsHeaders, setSecurityHeaders, handleOptions } from '../lib/cors.js';
+import { requireApiAuth } from '../lib/auth.js';
 
 export default async function handler(req, res) {
   setCorsHeaders(res, req);

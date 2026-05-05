@@ -1,10 +1,10 @@
-import { setCorsHeaders, setSecurityHeaders, handleOptions } from './_lib/cors.js';
+import { setCorsHeaders, setSecurityHeaders, handleOptions } from '../lib/cors.js';
 import {
   clearAuthSessionCookie,
   getRequestBearerToken,
   isAuthorizedRequest,
   setAuthSessionCookie,
-} from './_lib/auth.js';
+} from '../lib/auth.js';
 
 export default async function handler(req, res) {
   setCorsHeaders(res, req);

@@ -1,4 +1,4 @@
-import { executeAction } from '../api/_lib/actions/index.js';
+import { executeAction } from '../lib/actions/index.js';
 
 const MOCK_MODE = false;
 

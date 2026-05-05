@@ -7,7 +7,7 @@
  * - Cross-thread linking works
  */
 
-import { extractEntities, extractKeywords, generateSearchQueries } from '../api/_lib/utils/entity-extractor.js';
+import { extractEntities, extractKeywords, generateSearchQueries } from '../lib/utils/entity-extractor.js';
 
 console.log('\n=== TEST 1: Entity Extraction ===');
 

@@ -1,5 +1,5 @@
-import { setCorsHeaders, setSecurityHeaders, handleOptions } from './_lib/cors.js';
-import { requireApiAuth } from './_lib/auth.js';
+import { setCorsHeaders, setSecurityHeaders, handleOptions } from '../lib/cors.js';
+import { requireApiAuth } from '../lib/auth.js';
 
 function getOp(req) {
   try {

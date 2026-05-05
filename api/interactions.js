@@ -8,17 +8,17 @@ import {
   isAuthorizedUser,
   getUserId,
   getOption,
-} from './_lib/discord.js';
+} from '../lib/discord.js';
 
-import { askGemini, generateWeeklyReview } from './_lib/gemini.js';
+import { askGemini, generateWeeklyReview } from '../lib/gemini.js';
 import {
   getEventsToday,
   getEventsRange,
-} from './_lib/calendar.js';
-import { getCurrentModeStatus } from './_lib/mode.js';
-import { logCommand, getActiveMode, getCommandLogs } from './_lib/supabase.js';
-import { getTipeHari, getHariIni, getTanggalHariIni } from './_lib/context.js';
-import { executeActionSafely } from './_lib/actions/index.js';
+} from '../lib/calendar.js';
+import { getCurrentModeStatus } from '../lib/mode.js';
+import { logCommand, getActiveMode, getCommandLogs } from '../lib/supabase.js';
+import { getTipeHari, getHariIni, getTanggalHariIni } from '../lib/context.js';
+import { executeActionSafely } from '../lib/actions/index.js';
 
 /**
  * Vercel Serverless Function Config

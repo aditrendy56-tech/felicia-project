@@ -1,5 +1,5 @@
-import { setCorsHeaders, setSecurityHeaders, handleOptions } from './_lib/cors.js';
-import { requireApiAuth } from './_lib/auth.js';
+import { setCorsHeaders, setSecurityHeaders, handleOptions } from '../lib/cors.js';
+import { requireApiAuth } from '../lib/auth.js';
 
 function getOp(req) {
   try {
@@ -138,7 +138,7 @@ export default async function handler(req, res) {
     if (op === 'embedding-status' || op === 'debug-embedding-status' || op === 'embedding') {
       if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
       // Ported and adapted from debug-embedding-status.js — return JSON instead of console
-      const { getSupabase } = await import('./_lib/supabase.js');
+      const { getSupabase } = await import('../lib/supabase.js');
       const supabase = getSupabase();
       if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
 

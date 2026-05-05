@@ -1,6 +1,6 @@
-import { orchestrateChat } from '../_lib/orchestrator/chat-orchestrator.js';
-import { getRelevantMemories } from '../_lib/guards/memory-guard.js';
-import { setExternalCorsHeaders, validateExternalApiKey, handleOptions } from '../_lib/external-middleware.js';
+import { orchestrateChat } from '../../lib/orchestrator/chat-orchestrator.js';
+import { getRelevantMemories } from '../../lib/guards/memory-guard.js';
+import { setExternalCorsHeaders, validateExternalApiKey, handleOptions } from '../../lib/external-middleware.js';
 
 export default async function handler(req, res) {
   try {
